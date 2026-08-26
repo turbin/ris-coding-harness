@@ -1,0 +1,11 @@
+PM-Workers 工程团队已改为项目级 Skill。
+
+在已初始化的工程中：
+1. 读取 `AGENTS.md` 作为上下文路由入口；
+2. 使用 `.agents/skills/pm-workers-engineering/SKILL.md`；
+3. PM / Coder / Reviewer 的详细职责按角色从 Skill references 渐进加载；
+4. 工程特殊规范从 `docs/engineering/index.md` 按需披露，不在团队启动 Prompt 中硬编码。
+
+新工程推荐执行：
+
+curl -fsSL https://raw.githubusercontent.com/turbin/project-init-scripts/main/install.sh | bash -s -- --target .
