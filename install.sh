@@ -126,6 +126,14 @@ if [ "$INSTALL_SKILL" -eq 1 ]; then
   done < <(find "$SKILL_SRC" -type f -print0)
 fi
 
+RSI_SRC="$SOURCE_ROOT/templates/project/.rsi"
+if [ -d "$RSI_SRC" ]; then
+  while IFS= read -r -d '' f; do
+    rel="${f#$RSI_SRC/}"
+    managed_copy "$f" "$TARGET/.rsi/$rel"
+  done < <(find "$RSI_SRC" -type f -print0)
+fi
+
 INDEX_BODY='# Index
 
 Use this file as a lightweight navigation surface. Keep entries concise and point to the detailed artifact instead of duplicating it.
@@ -140,6 +148,8 @@ if [ "$MODE" = "init" ]; then
       write_if_missing "$TARGET/$d/index.md" "$INDEX_BODY"
     fi
   done
+  mkdir -p "$TARGET/evals/results"
+  write_if_missing "$TARGET/evals/index.md" "$INDEX_BODY"
 fi
 
 # Always provide routing indexes for project-management records when the directory exists.

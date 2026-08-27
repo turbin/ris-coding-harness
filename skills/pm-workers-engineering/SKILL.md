@@ -317,6 +317,8 @@ Reviewer decision is one of:
 
 No bare `LGTM` acceptance.
 
+For every milestone decision, Reviewer must emit a machine-readable verdict per `references/verdict-schema.md`. This verdict is part of the Definition of Done.
+
 ---
 
 # 9. Adversarial review protocol
@@ -409,6 +411,7 @@ When the canonical initialized layout exists:
 - active long-running task state → `progress/`
 - user-requested conversation archival → `conversations/`
 - delivery/build/release descriptions → `output/`
+- structured review verdicts → `evals/results/`
 - disposable working artifacts → `tmp/`
 
 Use each directory's `index.md` and local formatting rules before creating records.
@@ -450,6 +453,7 @@ A task can be marked Done only when all applicable conditions are satisfied:
 - no unresolved MAJOR unless explicitly accepted by project/user policy;
 - memory/resource impact reviewed where applicable;
 - no unrelated changes remain;
+- structured reviewer verdict recorded;
 - Reviewer returns `MILESTONE ACCEPTED`.
 
 PM cannot override the Reviewer gate silently.

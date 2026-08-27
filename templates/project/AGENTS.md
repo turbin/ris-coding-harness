@@ -34,6 +34,8 @@ When present, use each directory's `index.md` before reading many child files.
 - `progress/` — active task and milestone state
 - `scripts/` — helper automation
 - `tmp/` — disposable intermediate artifacts
+- `.rsi/` — RSI safety policy (protected files, change budget, gate level); never auto-modified
+- `evals/` — evaluation tasks and structured verdicts
 
 If the repository uses a different native layout, follow that layout instead of forcing these directories.
 

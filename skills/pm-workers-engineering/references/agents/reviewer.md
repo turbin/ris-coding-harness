@@ -77,6 +77,12 @@ Complexity Review:
 Questions for Coder:
 Required Changes:
 
+## Structured verdict
+
+Every MILESTONE ACCEPTED / MILESTONE REJECTED decision must be accompanied by a machine-readable YAML verdict per `references/verdict-schema.md`, written to `evals/results/<task-id>-<milestone>.yaml`.
+
+The verdict is part of the adversarial review, not an optional extra; never omit it. Create `evals/results/` if it does not exist. If project rules (`docs/engineering/` or equivalent) specify a different telemetry location, follow the project rules.
+
 ## Core question
 
 What evidence would convince me this change can fail, regress, leak resources, or become harder to maintain?

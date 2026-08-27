@@ -1,0 +1,23 @@
+# RSI policy — safety boundary for recursive self-improvement.
+# This file is an L3 (harness-layer) asset: agent self-modification must never touch it.
+schema_version: 1
+
+# Files/globs that autonomous mutation must never modify.
+protected_files:
+  - ".rsi/**"
+  - "evals/tasks/**"
+  - "evals/run-eval.*"
+
+# Per-round mutation budget. Exceeding it requires splitting into multiple rounds.
+change_budget:
+  max_files_per_mutation: 2
+  max_diff_lines_per_mutation: 40
+
+# Gate level: observe-only | l1-auto | all-manual
+gate: l1-auto
+
+# Self-modification layers (risk ascending). L3 never auto-mutates.
+layers:
+  L1: "docs/engineering/**"      # project rules; default mutation target
+  L2: ".agents/skills/**"        # collaboration protocol; needs eval non-regression
+  L3: ".rsi/**"                  # harness mechanism; human approval only

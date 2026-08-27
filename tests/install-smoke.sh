@@ -17,6 +17,8 @@ test -f "$TMP/new/src/index.md"
 test -f "$TMP/new/tests/index.md"
 test -f "$TMP/new/docs/engineering/index.md"
 test -f "$TMP/new/.agents/skills/pm-workers-engineering/SKILL.md"
+test -f "$TMP/new/.rsi/policy.yaml"
+test -d "$TMP/new/evals/results"
 
 # Existing project should be adopted without canonical source/test directories.
 test -f "$TMP/existing/AGENTS.md"
