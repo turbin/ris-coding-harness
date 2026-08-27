@@ -1,1 +1,11 @@
-创建agent团队，使用PM-Workers模式进行管理。其中需要一名pm负责拆解任务并分配，同时汇报任务完成进展；需要一名reviewer在负责验收里程碑节点的交付物，并与coder进行对抗式代码审阅，coder负责补充和说明代码变更的原因，reviewer负责批判代码质量；需要一名coder负责使用TDD开发流程模式进行开发；3.约束：代码工程严格按照zotero工程的要求进行构建；代码必须简练不要有冗余；严格控制内存消耗。
+PM-Workers 工程团队已改为项目级 Skill。
+
+在已初始化的工程中：
+1. 读取 `AGENTS.md` 作为上下文路由入口；
+2. 使用 `.agents/skills/pm-workers-engineering/SKILL.md`；
+3. PM / Coder / Reviewer 的详细职责按角色从 Skill references 渐进加载；
+4. 工程特殊规范从 `docs/engineering/index.md` 按需披露，不在团队启动 Prompt 中硬编码。
+
+新工程推荐执行：
+
+curl -fsSL https://raw.githubusercontent.com/turbin/project-init-scripts/main/install.sh | bash -s -- --target .
