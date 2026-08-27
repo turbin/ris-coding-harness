@@ -445,7 +445,7 @@ Every problem discovered during a task that is **not fixed within that task** mu
 - known limitations declared in the Coder's change explanation;
 - infrastructure gaps discovered during onboarding (missing tooling, unverifiable commands).
 
-Issues found and fixed inside the same task need no `issues/` record — the verdict and regression tests already capture them.
+Issues found and fixed inside the same task need no `issues/` record — the verdict and regression tests already capture them. Every fixed defect must have a regression test that fails without the fix; when a recorded issue is later fixed, update its record to reference the guarding regression test, so future reflection can trace failure mode → fix → guarding test.
 
 A record is minimal: what the problem is, reproduction or evidence, severity, the task/milestone that surfaced it, and status. Do not expand scope to fix a discovered issue; record it and let the PM triage.
 
@@ -481,7 +481,7 @@ A task can be marked Done only when all applicable conditions are satisfied:
 - required project rules were discovered and followed;
 - failing test/evidence existed before implementation when TDD applies;
 - relevant tests/checks pass;
-- regression coverage exists when appropriate;
+- regression coverage exists for every defect fixed in this task (a test that fails without the fix);
 - Coder self-review completed;
 - Coder change rationale supplied;
 - Reviewer adversarial review completed;
