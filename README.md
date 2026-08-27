@@ -149,6 +149,8 @@ docs/engineering/                # 当前工程自己的特殊规则
 | Kimi / Kimi Code | 任务匹配 description 时自动触发；或在提示词中显式指定 Skill 路径 |
 | 其他 agent | 在提示词中显式引用 `SKILL.md` 路径（见下方推荐提示词） |
 
+对话触发词： Skill 的 description 已内置触发条件——在对话中提出「用 pm-workers 模式开发」「PM-Workers 开发模式」「PM/Coder/Reviewer 多角色开发」等说法，支持自动激活的 agent 会自行加载该 Skill，无需记命令。
+
 推荐启动提示词（显式锚定流程，任何 agent 都适用）：
 
 ```text
