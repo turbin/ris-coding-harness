@@ -45,6 +45,13 @@ Ask:
 - are listeners/timers/tasks cleaned up?
 - is cache/queue growth bounded?
 
+### Issue closure
+Before accepting, check `issues/` (or the project's native tracker) for records related to this task/milestone — both user-reported ones and ones the Coder recorded while working:
+
+- every related issue must be either verified fixed with evidence (test, repro no longer reproduces), or explicitly deferred with its record updated (status, reason, severity);
+- a milestone must not be accepted while a related issue it was meant to fix remains open, unless the user explicitly accepts the deferral;
+- do not expand scope to unrelated open issues — note them and let the PM triage.
+
 ## Adversarial protocol
 
 Reviewer Challenge

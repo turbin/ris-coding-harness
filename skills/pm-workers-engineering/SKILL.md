@@ -322,7 +322,8 @@ Reviewer challenges:
 - concurrency/lifecycle/resource handling;
 - runtime memory growth and cleanup;
 - compatibility and migration concerns;
-- divergence from discovered project conventions.
+- divergence from discovered project conventions;
+- closure of issues related to the task — user-reported and coder-recorded alike: fixed with evidence, or explicitly deferred with the record updated.
 
 Issue severity:
 
@@ -488,6 +489,7 @@ A task can be marked Done only when all applicable conditions are satisfied:
 - no unresolved MAJOR unless explicitly accepted by project/user policy;
 - memory/resource impact reviewed where applicable;
 - every discovered problem not fixed in this task is recorded in `issues/` (or the project's native tracker);
+- issues related to this task/milestone are verified resolved with evidence, or explicitly deferred with their records updated;
 - no unrelated changes remain;
 - structured reviewer verdict recorded;
 - Reviewer returns `MILESTONE ACCEPTED`.
