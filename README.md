@@ -50,6 +50,10 @@ git clone git@github.com:turbin/ris-coding-harness.git
 
 # 或下载单文件后在目标工程执行
 powershell -ExecutionPolicy Bypass -File install.ps1 -Target . -Mode adopt
+
+# 按 agent 分发（与 bash 版参数一致）
+.\install.ps1 -Target . -Agent claude,opencode          # 工程内多 agent 接入
+.\install.ps1 -Target . -Agent all -Scope user          # 本机所有 agent 全局可用
 ```
 
 对应冒烟测试：`pwsh ./tests/install-smoke.ps1`。
@@ -132,23 +136,45 @@ docs/engineering/                # 当前工程自己的特殊规则
 
 安装完成后，填写目标工程中的 `docs/engineering/index.md`，以及只与本工程相关的规则文件（架构、编码、测试、性能、Git、工具链）。这些规则是 L1 层资产，也是 RSI 闭环默认允许自动改进的对象。
 
-### 2. Agent 进入工程工作
+### 2. 调用 Skill 启动多 agent 开发
 
-Agent 在已初始化的工程中按以下顺序工作：
+在已初始化的工程中启动 agent 会话，用一句话发起任务即可。Skill 的激活方式因 agent 而异：
 
-1. 读取 `AGENTS.md` 作为上下文路由入口；
-2. 读取 `docs/engineering/index.md`，只加载当前任务需要的规则文件；
-3. 使用 `.agents/skills/pm-workers-engineering/SKILL.md` 执行 PM-Workers 流程；
-4. PM / Coder / Reviewer 的详细职责按角色从 Skill references 渐进加载。
+| Agent | 激活方式 |
+|---|---|
+| Claude Code | 斜杠命令 `/pm-workers-engineering`，或任务匹配 description 时自动触发 |
+| pi | `/skill:pm-workers-engineering`（可带参数），或自动触发 |
+| Codex | `$pm-workers-engineering` 提及，或自动触发 |
+| opencode | 原生 `skill` 工具自动触发；也可直接说「use the pm-workers-engineering skill」 |
+| Kimi / Kimi Code | 任务匹配 description 时自动触发；或在提示词中显式指定 Skill 路径 |
+| 其他 agent | 在提示词中显式引用 `SKILL.md` 路径（见下方推荐提示词） |
 
-开发流程：
+推荐启动提示词（显式锚定流程，任何 agent 都适用）：
+
+```text
+按照 pm-workers-engineering SKILL.md 的 PM-Workers 流程完成以下需求：
+
+需求：<一句话目标>
+约束：<可选，如“不改公开 API”、“不新增第三方依赖”>
+验收：<可选，如“新增功能需有测试覆盖”>
+
+要求：PM 拆解 → Coder TDD → Reviewer 对抗审阅；里程碑必须拿到
+MILESTONE ACCEPTED；每个里程碑决定按 verdict-schema.md 输出 YAML verdict
+到 evals/results/；完成后给出 PM 汇报（DONE / PARTIAL / BLOCKED）。
+```
+
+多 agent 架构在任务内自动运转：
 
 ```text
 Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审阅
         → Coder 修复/举证 → Reviewer 验证 → 里程碑验收 → PM 汇报
 ```
 
-里程碑必须经 Reviewer 验收（`MILESTONE ACCEPTED`）才算完成，不允许实现阶段自我批准。
+- 运行环境支持子代理时（如 Claude Code subagents、Kimi Code Agent 工具、pi subagent），PM / Coder / Reviewer 会以逻辑独立的角色执行；不支持时按顺序扮演，但 Reviewer 验收门禁不可省略。
+- Agent 工作时的上下文加载顺序：`AGENTS.md` → `docs/engineering/index.md` → 任务相关规则 → Skill 角色 references（渐进式披露）。
+- 里程碑必须经 Reviewer 验收（`MILESTONE ACCEPTED`）才算完成，不允许实现阶段自我批准。
+
+> 当前版本为「单任务全自动」：每次任务需发起一次。跨任务无人值守循环（`rsi-loop`）见下方 Phase 5，尚未实施。
 
 ### 3. RSI 自我改进闭环（设计中）
 
