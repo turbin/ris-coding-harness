@@ -94,6 +94,13 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -Target . -Mode adopt
 ./install.sh --target . --agent all --scope user
 ```
 
+curl 远程安装时参数经 `bash -s --` 原样透传，直接追加即可：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/turbin/ris-coding-harness/main/install.sh | \
+  bash -s -- --target . --agent claude,opencode
+```
+
 注：pi / opencode / Codex 也会读取 `.agents/skills/`，所以即使不指定它们也能发现 Skill；`--agent` 用于写入各 agent 的原生首选路径。project 作用域的 agent 目录会进入 Git，适合团队共享；user 作用域只对当前用户生效。
 
 安装器幂等且非破坏性：默认保留已存在文件，只有显式传入 `--force` 才覆盖。
