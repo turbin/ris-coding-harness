@@ -435,6 +435,19 @@ When the canonical initialized layout exists:
 - structured review verdicts → `evals/results/`
 - disposable working artifacts → `tmp/`
 
+## Issue recording duty
+
+Every problem discovered during a task that is **not fixed within that task** must be recorded in `issues/` (or the project's native tracker when the project defines one). This includes:
+
+- defects or smells noticed while working that fall outside the current scope;
+- MAJOR findings the Reviewer accepted under project/user policy;
+- known limitations declared in the Coder's change explanation;
+- infrastructure gaps discovered during onboarding (missing tooling, unverifiable commands).
+
+Issues found and fixed inside the same task need no `issues/` record — the verdict and regression tests already capture them.
+
+A record is minimal: what the problem is, reproduction or evidence, severity, the task/milestone that surfaced it, and status. Do not expand scope to fix a discovered issue; record it and let the PM triage.
+
 Use each directory's `index.md` and local formatting rules before creating records.
 
 Do not automatically save conversations. Only save them when the user explicitly requests it.
@@ -474,6 +487,7 @@ A task can be marked Done only when all applicable conditions are satisfied:
 - no unresolved BLOCKER;
 - no unresolved MAJOR unless explicitly accepted by project/user policy;
 - memory/resource impact reviewed where applicable;
+- every discovered problem not fixed in this task is recorded in `issues/` (or the project's native tracker);
 - no unrelated changes remain;
 - structured reviewer verdict recorded;
 - Reviewer returns `MILESTONE ACCEPTED`.
