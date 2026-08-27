@@ -62,8 +62,35 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -Target . -Mode adopt
 --force                覆盖安装器管理的模板文件
 --no-git               不初始化 Git 仓库
 --no-skill             不安装 PM-Workers Skill
+--agent LIST           额外分发 Skill 到指定 agent 目录（逗号分隔，可重复；支持 all）
+--scope project|user   agent 目录的作用域：工程内 / 用户主目录（默认 project）
 -h, --help             查看完整帮助
 ```
+
+### 按目标 agent 分发 Skill
+
+默认只安装到通用标准路径 `.agents/skills/`。用 `--agent` 追加各 agent 的原生 skill 目录（已按各官方文档核实）：
+
+| `--agent` | project 作用域（默认） | user 作用域（`--scope user`） |
+|---|---|---|
+| `claude` | `.claude/skills/` | `~/.claude/skills/` |
+| `pi` | `.pi/skills/` | `~/.pi/agent/skills/` |
+| `kimi` / `kimi-code` | `.kimi/skills/` | `~/.kimi/skills/` |
+| `opencode` | `.opencode/skills/` | `~/.config/opencode/skills/` |
+| `codex` | `.codex/skills/` | `~/.codex/skills/` |
+| `agents` | `.agents/skills/` | `~/.agents/skills/` |
+
+示例：
+
+```bash
+# 工程内同时接入 Claude Code 和 opencode（团队共享，随仓库提交）
+./install.sh --target . --agent claude,opencode
+
+# 把 Skill 装到本机所有支持 agent 的用户级目录（跨工程生效）
+./install.sh --target . --agent all --scope user
+```
+
+注：pi / opencode / Codex 也会读取 `.agents/skills/`，所以即使不指定它们也能发现 Skill；`--agent` 用于写入各 agent 的原生首选路径。project 作用域的 agent 目录会进入 Git，适合团队共享；user 作用域只对当前用户生效。
 
 安装器幂等且非破坏性：默认保留已存在文件，只有显式传入 `--force` 才覆盖。
 

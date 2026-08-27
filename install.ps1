@@ -22,8 +22,20 @@
 .PARAMETER NoSkill
   Do not install the PM-Workers skill.
 
+.PARAMETER Agent
+  Additionally install the skill to agent-specific directories.
+  Values: claude, pi, kimi, kimi-code, opencode, codex, agents, all.
+  Accepts comma-separated names and/or repeated parameters.
+
+.PARAMETER Scope
+  project | user (default: project) — resolve agent skill directories
+  under the target project or under the user home.
+
 .EXAMPLE
   .\install.ps1 -Target .\my-project -Mode init
+
+.EXAMPLE
+  .\install.ps1 -Target .\my-project -Agent claude,opencode -Scope project
 
 .EXAMPLE
   irm https://raw.githubusercontent.com/turbin/ris-coding-harness/main/install.ps1 | iex
@@ -37,6 +49,9 @@ param(
   [switch]$Force,
   [switch]$NoGit,
   [switch]$NoSkill,
+  [string[]]$Agent = @(),
+  [ValidateSet("project", "user")]
+  [string]$Scope = "project",
   [switch]$Help
 )
 
@@ -59,6 +74,11 @@ Options:
   -Force                 Overwrite managed files created by this installer
   -NoGit                 Do not initialize a Git repository
   -NoSkill               Do not install the PM-Workers skill
+  -Agent NAMES           Also install the skill to agent-specific directories.
+                         Values: claude, pi, kimi, kimi-code, opencode, codex,
+                         agents, all. Comma-separated and/or repeated.
+  -Scope project|user    Resolve agent directories under the target project
+                         or the user home (default: project)
   -Help                  Show this help
 
 Modes:
@@ -69,6 +89,8 @@ Modes:
 Examples:
   .\install.ps1 -Target my-project -Mode init
   .\install.ps1 -Target existing-project -Mode adopt
+  .\install.ps1 -Target my-project -Agent claude,opencode
+  .\install.ps1 -Target my-project -Agent pi -Scope user
 '@ | Write-Host
 }
 
@@ -83,6 +105,50 @@ function Get-RelPath([string]$Path) {
     return $Path.Substring($TargetRoot.Length).TrimStart('\', '/')
   }
   return $Path
+}
+
+# --- Agent skill destinations ---------------------------------------------------
+$AgentMap = @{
+  "claude"    = @{ project = ".claude/skills";   user = ".claude/skills" }
+  "pi"        = @{ project = ".pi/skills";       user = ".pi/agent/skills" }
+  "kimi"      = @{ project = ".kimi/skills";     user = ".kimi/skills" }
+  "kimi-code" = @{ project = ".kimi/skills";     user = ".kimi/skills" }
+  "opencode"  = @{ project = ".opencode/skills"; user = ".config/opencode/skills" }
+  "codex"     = @{ project = ".codex/skills";    user = ".codex/skills" }
+  "agents"    = @{ project = ".agents/skills";   user = ".agents/skills" }
+}
+
+function Get-SkillDest([string]$Name) {
+  $rel = $AgentMap[$Name][$Scope]
+  $prefix = if ($Scope -eq "user") { $HOME } else { $TargetRoot }
+  return Join-Path $prefix $rel
+}
+
+$RequestedAgents = @()
+foreach ($item in $Agent) {
+  foreach ($name in ($item -split ',')) {
+    $n = $name.Trim().ToLowerInvariant()
+    if ([string]::IsNullOrEmpty($n)) { continue }
+    if ($n -eq "all") {
+      foreach ($k in $AgentMap.Keys) {
+        if ($RequestedAgents -notcontains $k) { $RequestedAgents += $k }
+      }
+      continue
+    }
+    if (-not $AgentMap.ContainsKey($n)) {
+      [Console]::Error.WriteLine("Unknown agent: $n")
+      [Console]::Error.WriteLine("Supported agents: $(($AgentMap.Keys | Sort-Object) -join ', '), all")
+      exit 2
+    }
+    if ($RequestedAgents -notcontains $n) { $RequestedAgents += $n }
+  }
+}
+
+# .agents/skills is always installed; agent destinations are deduplicated on top.
+$SkillDests = @((Join-Path $TargetRoot ".agents/skills"))
+foreach ($a in $RequestedAgents) {
+  $d = Get-SkillDest $a
+  if ($SkillDests -notcontains $d) { $SkillDests += $d }
 }
 
 # --- Resolve source root (local checkout or remote download) ------------------
@@ -130,6 +196,14 @@ try {
     Write-Host ("write  {0}" -f (Get-RelPath $Dst))
   }
 
+  function Install-SkillTo([string]$Dest) {
+    $SkillSrcPath = Join-Path $SourceRoot "skills/pm-workers-engineering"
+    Get-ChildItem $SkillSrcPath -Recurse -File | ForEach-Object {
+      $rel = $_.FullName.Substring($SkillSrcPath.Length).TrimStart('\', '/')
+      Managed-Copy $_.FullName (Join-Path $Dest ("pm-workers-engineering/" + $rel))
+    }
+  }
+
   function Test-NearEmpty {
     $count = (Get-ChildItem -Force $TargetRoot |
       Where-Object { $_.Name -ne ".git" -and $_.Name -ne ".DS_Store" } |
@@ -150,10 +224,8 @@ try {
   }
 
   if (-not $NoSkill) {
-    $SkillSrc = Join-Path $SourceRoot "skills/pm-workers-engineering"
-    Get-ChildItem $SkillSrc -Recurse -File | ForEach-Object {
-      $rel = $_.FullName.Substring($SkillSrc.Length).TrimStart('\', '/')
-      Managed-Copy $_.FullName (Join-Path $TargetRoot (".agents/skills/pm-workers-engineering/" + $rel))
+    foreach ($dest in $SkillDests) {
+      Install-SkillTo $dest
     }
   }
 
@@ -252,7 +324,9 @@ Thumbs.db
   Write-Host "Next: fill docs/engineering/index.md and only the rule files relevant to this project."
   Write-Host "Agent entry: AGENTS.md"
   if (-not $NoSkill) {
-    Write-Host "Skill entry: .agents/skills/pm-workers-engineering/SKILL.md"
+    foreach ($d in $SkillDests) {
+      Write-Host ("Skill entry: " + (Get-RelPath (Join-Path $d "pm-workers-engineering/SKILL.md")))
+    }
   }
 }
 finally {

@@ -33,4 +33,25 @@ printf '%s\n' '# local customization' > "$TMP/existing/docs/engineering/coding.m
 "$ROOT/install.sh" --target "$TMP/existing" --mode adopt --no-git >/dev/null
 grep -q '^# local customization$' "$TMP/existing/docs/engineering/coding.md"
 
+# --agent distributes the skill to each requested agent directory (plus canonical .agents).
+mkdir -p "$TMP/multi"
+"$ROOT/install.sh" --target "$TMP/multi" --mode auto --no-git --agent claude,opencode,codex >/dev/null
+test -f "$TMP/multi/.agents/skills/pm-workers-engineering/SKILL.md"
+test -f "$TMP/multi/.claude/skills/pm-workers-engineering/SKILL.md"
+test -f "$TMP/multi/.opencode/skills/pm-workers-engineering/SKILL.md"
+test -f "$TMP/multi/.codex/skills/pm-workers-engineering/SKILL.md"
+
+# Repeated --agent flags accumulate.
+mkdir -p "$TMP/repeat"
+"$ROOT/install.sh" --target "$TMP/repeat" --mode auto --no-git --agent claude --agent pi >/dev/null
+test -f "$TMP/repeat/.pi/skills/pm-workers-engineering/SKILL.md"
+test -f "$TMP/repeat/.claude/skills/pm-workers-engineering/SKILL.md"
+
+# Unknown agent names must fail before anything is written.
+if "$ROOT/install.sh" --target "$TMP/bad" --mode auto --no-git --agent foo 2>/dev/null; then
+  echo "install smoke test: FAIL (unknown agent accepted)" >&2
+  exit 1
+fi
+test ! -e "$TMP/bad/AGENTS.md"
+
 echo "install smoke test: PASS"

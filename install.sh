@@ -8,6 +8,8 @@ MODE="auto"
 FORCE=0
 GIT_INIT=1
 INSTALL_SKILL=1
+AGENTS_LIST=""
+SCOPE="project"
 
 usage() {
   cat <<'USAGE'
@@ -22,6 +24,10 @@ Options:
   --force                Overwrite managed files created by this installer
   --no-git               Do not initialize a Git repository
   --no-skill             Do not install the PM-Workers skill
+  --agent LIST           Also install the skill for these agents (comma-separated,
+                         repeatable): claude, pi, kimi, kimi-code, opencode,
+                         codex, agents, all
+  --scope project|user   Skill install scope (default: project)
   -h, --help             Show this help
 
 Modes:
@@ -32,6 +38,8 @@ Modes:
 Examples:
   ./install.sh --target my-project --mode init
   ./install.sh --target existing-project --mode adopt
+  ./install.sh --agent claude,opencode
+  ./install.sh --agent all --scope user
   curl -fsSL https://raw.githubusercontent.com/turbin/project-init-scripts/main/install.sh | bash -s -- --target .
 USAGE
 }
@@ -43,12 +51,15 @@ while [ "$#" -gt 0 ]; do
     --force) FORCE=1; shift ;;
     --no-git) GIT_INIT=0; shift ;;
     --no-skill) INSTALL_SKILL=0; shift ;;
+    --agent) AGENTS_LIST="${AGENTS_LIST:+$AGENTS_LIST,}${2:?missing value for --agent}"; shift 2 ;;
+    --scope) SCOPE="${2:?missing value for --scope}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
 case "$MODE" in auto|init|adopt) ;; *) echo "Invalid mode: $MODE" >&2; exit 2 ;; esac
+case "$SCOPE" in project|user) ;; *) echo "Invalid scope: $SCOPE" >&2; exit 2 ;; esac
 
 mkdir -p "$TARGET"
 TARGET="$(cd "$TARGET" && pwd)"
@@ -102,6 +113,19 @@ write_if_missing() {
   printf 'write  %s\n' "${dst#$TARGET/}"
 }
 
+# Print the skills directory for an agent according to SCOPE.
+skill_dest() {
+  case "$1" in
+    claude)         [ "$SCOPE" = "user" ] && echo "$HOME/.claude/skills" || echo "$TARGET/.claude/skills" ;;
+    pi)             [ "$SCOPE" = "user" ] && echo "$HOME/.pi/agent/skills" || echo "$TARGET/.pi/skills" ;;
+    kimi|kimi-code) [ "$SCOPE" = "user" ] && echo "$HOME/.kimi/skills" || echo "$TARGET/.kimi/skills" ;;
+    opencode)       [ "$SCOPE" = "user" ] && echo "$HOME/.config/opencode/skills" || echo "$TARGET/.opencode/skills" ;;
+    codex)          [ "$SCOPE" = "user" ] && echo "$HOME/.codex/skills" || echo "$TARGET/.codex/skills" ;;
+    agents)         [ "$SCOPE" = "user" ] && echo "$HOME/.agents/skills" || echo "$TARGET/.agents/skills" ;;
+    *) return 1 ;;
+  esac
+}
+
 is_near_empty() {
   count="$(find "$TARGET" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.DS_Store' | wc -l | tr -d ' ')"
   [ "$count" -eq 0 ]
@@ -111,6 +135,37 @@ if [ "$MODE" = "auto" ]; then
   if is_near_empty; then MODE="init"; else MODE="adopt"; fi
 fi
 
+# Resolve and validate skill destinations up front so an unknown --agent
+# fails before any file is written.
+SKILL_DESTS=()
+if [ "$INSTALL_SKILL" -eq 1 ]; then
+  SKILL_DESTS=("$TARGET/.agents/skills")
+  if [ -n "$AGENTS_LIST" ]; then
+    requested=""
+    OLD_IFS="$IFS"; IFS=','
+    for a in $AGENTS_LIST; do
+      if [ "$a" = "all" ]; then
+        requested="$requested claude pi kimi kimi-code opencode codex agents"
+      else
+        requested="$requested $a"
+      fi
+    done
+    IFS="$OLD_IFS"
+    for a in $requested; do
+      if ! dest="$(skill_dest "$a")"; then
+        echo "Unknown agent: $a" >&2
+        echo "Supported agents: claude, pi, kimi, kimi-code, opencode, codex, agents, all" >&2
+        exit 2
+      fi
+      dup=0
+      for d in "${SKILL_DESTS[@]}"; do
+        if [ "$d" = "$dest" ]; then dup=1; break; fi
+      done
+      [ "$dup" -eq 1 ] || SKILL_DESTS+=("$dest")
+    done
+  fi
+fi
+
 echo "Project bootstrap: mode=$MODE target=$TARGET"
 
 managed_copy "$SOURCE_ROOT/templates/project/AGENTS.md" "$TARGET/AGENTS.md"
@@ -118,12 +173,19 @@ for f in "$SOURCE_ROOT"/templates/project/docs/engineering/*.md; do
   managed_copy "$f" "$TARGET/docs/engineering/$(basename "$f")"
 done
 
-if [ "$INSTALL_SKILL" -eq 1 ]; then
-  SKILL_SRC="$SOURCE_ROOT/skills/pm-workers-engineering"
+install_skill_to() {
+  dest="$1"
   while IFS= read -r -d '' f; do
     rel="${f#$SKILL_SRC/}"
-    managed_copy "$f" "$TARGET/.agents/skills/pm-workers-engineering/$rel"
+    managed_copy "$f" "$dest/pm-workers-engineering/$rel"
   done < <(find "$SKILL_SRC" -type f -print0)
+}
+
+if [ "$INSTALL_SKILL" -eq 1 ]; then
+  SKILL_SRC="$SOURCE_ROOT/skills/pm-workers-engineering"
+  for dest in "${SKILL_DESTS[@]}"; do
+    install_skill_to "$dest"
+  done
 fi
 
 RSI_SRC="$SOURCE_ROOT/templates/project/.rsi"
@@ -216,5 +278,7 @@ echo "Bootstrap complete."
 echo "Next: fill docs/engineering/index.md and only the rule files relevant to this project."
 echo "Agent entry: AGENTS.md"
 if [ "$INSTALL_SKILL" -eq 1 ]; then
-  echo "Skill entry: .agents/skills/pm-workers-engineering/SKILL.md"
+  for dest in "${SKILL_DESTS[@]}"; do
+    echo "Skill entry: ${dest#$TARGET/}/pm-workers-engineering/SKILL.md"
+  done
 fi

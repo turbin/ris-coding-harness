@@ -43,6 +43,30 @@ try {
   $coding = Get-Content (Join-Path $Existing "docs/engineering/coding.md") -Raw
   Assert-True ($coding -match "^# local customization") "local customization preserved"
 
+  # -Agent claude,opencode,codex installs the skill to .agents plus all three agent dirs.
+  $Multi = Join-Path $Tmp "multi"
+  New-Item -ItemType Directory -Force -Path $Multi | Out-Null
+  & (Join-Path $Root "install.ps1") -Target $Multi -Mode adopt -NoGit -Agent claude,opencode,codex | Out-Null
+  Assert-True (Test-Path (Join-Path $Multi ".agents/skills/pm-workers-engineering/SKILL.md")) "multi .agents skill"
+  Assert-True (Test-Path (Join-Path $Multi ".claude/skills/pm-workers-engineering/SKILL.md")) "multi .claude skill"
+  Assert-True (Test-Path (Join-Path $Multi ".opencode/skills/pm-workers-engineering/SKILL.md")) "multi .opencode skill"
+  Assert-True (Test-Path (Join-Path $Multi ".codex/skills/pm-workers-engineering/SKILL.md")) "multi .codex skill"
+
+  # -Agent may be passed repeatedly.
+  $Repeat = Join-Path $Tmp "repeat"
+  New-Item -ItemType Directory -Force -Path $Repeat | Out-Null
+  & (Join-Path $Root "install.ps1") -Target $Repeat -Mode adopt -NoGit -Agent claude -Agent pi | Out-Null
+  Assert-True (Test-Path (Join-Path $Repeat ".agents/skills/pm-workers-engineering/SKILL.md")) "repeat .agents skill"
+  Assert-True (Test-Path (Join-Path $Repeat ".claude/skills/pm-workers-engineering/SKILL.md")) "repeat .claude skill"
+  Assert-True (Test-Path (Join-Path $Repeat ".pi/skills/pm-workers-engineering/SKILL.md")) "repeat .pi skill"
+
+  # Unknown agent must fail with exit code 2.
+  $Bad = Join-Path $Tmp "bad"
+  New-Item -ItemType Directory -Force -Path $Bad | Out-Null
+  & (Join-Path $Root "install.ps1") -Target $Bad -Mode adopt -NoGit -Agent foo | Out-Null
+  Assert-True ($LASTEXITCODE -eq 2) "unknown agent must exit 2"
+  Assert-True (-not (Test-Path (Join-Path $Bad "AGENTS.md"))) "unknown agent must abort before installing"
+
   Write-Host "install smoke test: PASS"
 }
 finally {
