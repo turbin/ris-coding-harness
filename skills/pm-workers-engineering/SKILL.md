@@ -84,6 +84,15 @@ Only create or migrate engineering structure when:
 
 See `references/layout-adapter.md` when repository layout discovery is needed.
 
+## 1.4 Infrastructure onboarding
+
+When a task requires building, testing, or running the project but the engineering rules do not yet define the exact commands (missing files, template placeholders, or gaps), run the onboarding procedure in `references/project-onboarding.md` before implementation:
+
+- existing repository: scan manifests, CI, and test configuration, draft `tooling.md`/`testing.md` entries from evidence, and confirm with the user;
+- new repository: recommend a stack, ask the user, record confirmed choices in the rule files and significant choices in `decisions/`.
+
+Never invent build/test/lint commands.
+
 ---
 
 # 2. Progressive disclosure protocol
@@ -443,6 +452,7 @@ Stop expanding implementation and return control to PM when any of the following
 - memory/resource growth appears difficult to bound;
 - required project rules are contradictory;
 - tests cannot meaningfully verify the requested behavior;
+- a needed build/test/lint command is defined neither in project rules nor discoverable from repository evidence — ask the user instead of guessing (see `references/project-onboarding.md`);
 - the task scope has materially changed.
 
 PM must then re-scope, split the task, or record a decision before continuing.

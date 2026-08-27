@@ -129,6 +129,7 @@ docs/engineering/                # 当前工程自己的特殊规则
     references/
       context-disclosure.md
       layout-adapter.md
+      project-onboarding.md         # 基础设施发现程序（扫描/询问 → tooling/testing 规则）
       verdict-schema.md             # Reviewer 结构化 verdict 规范
       agents/
         pm.md
@@ -145,6 +146,13 @@ docs/engineering/                # 当前工程自己的特殊规则
 ### 1. 安装后补齐工程规则
 
 安装完成后，填写目标工程中的 `docs/engineering/index.md`，以及只与本工程相关的规则文件（架构、编码、测试、性能、Git、工具链）。这些规则是 L1 层资产，也是 RSI 闭环默认允许自动改进的对象。
+
+也可以不手填：Skill 内置基础设施 onboarding 程序（`project-onboarding.md`）——首个涉及构建/测试的任务触发时，agent 会自动处理：
+
+- **已有工程（adopt）**：扫描 manifest、CI 配置、测试框架等仓库证据，起草 `tooling.md` / `testing.md`，未覆盖项标记 `UNKNOWN` 并向你确认；
+- **新工程（init）**：推荐主流技术栈并询问确认，选择结果写入规则文件，重要选型记入 `decisions/`。
+
+硬性规则：agent 不得臆造 build/test 命令——规则文件和仓库证据都缺时会停下来问你（SKILL.md §13 停机条件）。spec/plan 只引用规则文件，不重复承载基础设施信息。
 
 ### 2. 调用 Skill 启动多 agent 开发
 
