@@ -167,6 +167,7 @@ docs/engineering/                # 当前工程自己的特殊规则
 按照 pm-workers-engineering SKILL.md 的 PM-Workers 流程完成以下需求：
 
 需求：<一句话目标>
+任务来源：<可选——plan/spec/设计文档路径，如 docs/specs/xxx.md；或 issues/ 记录>
 约束：<可选，如“不改公开 API”、“不新增第三方依赖”>
 验收：<可选，如“新增功能需有测试覆盖”>
 
@@ -174,6 +175,21 @@ docs/engineering/                # 当前工程自己的特殊规则
 MILESTONE ACCEPTED；每个里程碑决定按 verdict-schema.md 输出 YAML verdict
 到 evals/results/；完成后给出 PM 汇报（DONE / PARTIAL / BLOCKED）。
 ```
+
+Skill 带参数调用（支持斜杠命令的 agent）：参数会直接传给 Skill，可用于指定 plan/spec：
+
+```text
+# pi
+/skill:pm-workers-engineering docs/specs/cache-ttl.md
+
+# Claude Code
+/pm-workers-engineering docs/specs/cache-ttl.md
+
+# Codex
+$pm-workers-engineering docs/specs/cache-ttl.md
+```
+
+指定了任务来源文档时，PM 会先读该文档并以它为需求/范围/验收的准绳，而不是仅凭一句话需求拆解。
 
 多 agent 架构在任务内自动运转：
 

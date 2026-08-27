@@ -205,6 +205,18 @@ Do not inject all role details into every phase.
 
 The PM owns decomposition and orchestration, not production implementation.
 
+## Task intake
+
+A task request may arrive in any of these forms:
+
+1. an inline natural-language requirement;
+2. a referenced plan/spec/design document (path given by the user, e.g. a file under `docs/` or a skill-invocation argument);
+3. an existing record in `issues/` (defect to fix) or `progress/` (task to resume).
+
+When the request references a document or record, the PM must load it first and treat it as the source of truth for goal, scope, and acceptance criteria — do not re-derive requirements from the one-line request alone. Load the referenced document plus only the project rules relevant to it (progressive disclosure applies here too). If the referenced document is ambiguous or contradicts discovered project rules, ask before decomposing.
+
+When the request is purely inline and materially underspecified, the PM elicits the missing goal/scope/acceptance criteria before decomposition instead of guessing.
+
 Each task should contain, at minimum:
 
 - Task ID
