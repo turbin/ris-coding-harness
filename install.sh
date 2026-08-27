@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${PROJECT_INIT_REPO:-turbin/project-init-scripts}"
+REPO="${PROJECT_INIT_REPO:-turbin/ris-coding-harness}"
 REF="${PROJECT_INIT_REF:-main}"
 TARGET="."
 MODE="auto"
@@ -40,7 +40,7 @@ Examples:
   ./install.sh --target existing-project --mode adopt
   ./install.sh --agent claude,opencode
   ./install.sh --agent all --scope user
-  curl -fsSL https://raw.githubusercontent.com/turbin/project-init-scripts/main/install.sh | bash -s -- --target .
+  curl -fsSL https://raw.githubusercontent.com/turbin/ris-coding-harness/main/install.sh | bash -s -- --target .
 USAGE
 }
 

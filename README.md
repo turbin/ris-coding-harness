@@ -122,11 +122,14 @@ docs/engineering/                # 当前工程自己的特殊规则
     references/
       context-disclosure.md
       layout-adapter.md
+      verdict-schema.md             # Reviewer 结构化 verdict 规范
       agents/
         pm.md
         coder.md
         reviewer.md
 ```
+
+使用 `--agent` 时，Skill 还会按参数表复制到 `.claude/skills/`、`.pi/skills/`、`.kimi/skills/`、`.opencode/skills/`、`.codex/skills/` 等对应目录。
 
 `init` 模式还会创建 `src/`、`tests/`、`docs/`、`decisions/`、`issues/`、`conversations/`、`output/`、`progress/`、`scripts/`、`tmp/`、`evals/results/`（及 `evals/` 索引）。
 
@@ -178,7 +181,7 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 
 > 当前版本为「单任务全自动」：每次任务需发起一次。跨任务无人值守循环（`rsi-loop`）见下方 Phase 5，尚未实施。
 
-### 3. RSI 自我改进闭环（设计中）
+### 3. RSI 自我改进闭环（Phase 0-1 已实施）
 
 当前版本包含 PM-Workers 静态协作协议；递归自我改进回路的完整设计见 [docs/rsi-design.md](docs/rsi-design.md)，分阶段实施：
 
@@ -222,7 +225,7 @@ Agent 首先读取 `AGENTS.md`，再读取 `docs/engineering/index.md`，只加�
 pwsh ./tests/install-smoke.ps1  # Windows（PowerShell 5.1+ / pwsh 7+）
 ```
 
-覆盖：`init`/`adopt` 自动模式判断、核心文件落位、已有工程不被重排、重复执行的非破坏性。
+覆盖：`init`/`adopt` 自动模式判断、核心文件落位（含 `.rsi/` 策略与 `evals/results/`）、已有工程不被重排、重复执行的非破坏性、`--agent` 多目标分发与重复传参、未知 agent 的 fail-fast。
 
 ## 旧入口
 
