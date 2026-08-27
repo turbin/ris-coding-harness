@@ -220,7 +220,7 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 |---|---|---|
 | 0 | 三层自改进边界（L1 规则 / L2 Skill / L3 Harness）+ 安全门禁 | ✅ 已实施（`.rsi/policy.yaml`） |
 | 1 | 结构化 Reviewer verdict + 结果落账 `evals/results/` | ✅ 已实施（`verdict-schema.md`） |
-| 2 | eval 任务集 + pass@1 基线（RSI 的"损失函数"） | 设计完成 |
+| 2 | eval 任务集 + pass@1 基线（RSI 的"损失函数"） | ✅ 已实施（`evals/`，10 任务 + `run-eval.sh`） |
 | 3 | retro 归因 + L1 规则回写（第一次完整闭环） | 设计完成 |
 | 4 | L2 Skill 自改进（eval 驱动） | 设计完成 |
 | 5 | `rsi-loop` skill 无人值守循环（agent 内调用，shell 仅作可选调度薄壳） | 设计完成 |

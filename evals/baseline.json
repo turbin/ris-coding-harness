@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "pass_rate": null,
+  "per_task": {},
+  "note": "baseline not yet measured; run setup -> agent works -> verify -> update"
+}
