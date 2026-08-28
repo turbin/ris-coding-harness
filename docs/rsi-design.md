@@ -1,6 +1,6 @@
 # RIS Coding Harness — 递归自我改进（RSI）设计
 
-版本：v0.3（Phase 0-2 已实施，Phase 3-5 为设计稿）
+版本：v0.3（Phase 0-2 已实施，Phase 3-5 已实施）
 日期：2026-08-27
 
 ## 1. 背景与目标
