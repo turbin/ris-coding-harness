@@ -3,18 +3,15 @@ task_id: "03-missing-input-validation"
 milestone: "m1"
 decision: accepted
 scores:
-  correctness: 4
-  test_quality: 3
-  simplicity: 4
+  correctness: 5
+  test_quality: 5
+  simplicity: 5
   resource_safety: 5
   convention_fit: 5
-issues:
-  - severity: MAJOR
-    category: correctness
-    summary: "whitespace-only inputs slipped past `if not text` guard (empty vs blank confusion); caught by verify edge cases"
-    file: "textstats.py"
-rounds: 2
-coder_red_green_evidence: false
+issues: []
+rounds: 1
+coder_red_green_evidence: true
 loc_delta: {added: 14, removed: 4}
 new_dependencies: 0
-timestamp: "2026-08-28T23:48:00+08:00"
+timestamp: "2026-08-29T07:10:00+08:00"
+note: "re-run under rules P1-P3 (boundary checklist -> RED -> GREEN); first-attempt pass"

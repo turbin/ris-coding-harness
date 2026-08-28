@@ -12,8 +12,8 @@
 | P3-1 | 实测 eval 基线 | 10 个沙盒任务施工完毕，`evals/baseline.json` 记录真实 pass@1；每任务一条 verdict 落账 `evals/results/` | 基线非 null，`run-eval.sh check` 可比较 | done |
 | P3-2 | retro 机制落地 | `progress/retro/` 目录 + 报告模板 + `scripts/retro-aggregate.py`（verdict 聚合工具） | 能对 verdict 目录聚合 category/severity 统计并生成报告骨架 | done |
 | P3-3 | 跑一次完整 retro | `progress/retro/<date>.md` 报告：数据摘要、recurring patterns（≥2 次才成模式）、提案清单（含目标层/预期收益/验证方式） | 每条 pattern 都有可执行提案；归因指向机制原因 | done |
-| P3-4 | 提案审阅 + 用户确认 + L1 回写 | `decisions/` 提案记录；经对抗审阅与用户显式确认后回写 `templates/project/docs/engineering/` | 规则带 `source:` 标注；确认过程留痕 | in-progress（等待用户确认 P1-P3） |
-| P3-5 | eval 验证闭环 | 重跑 eval，与基线比较 | pass@1 不降（目标类别提升） | todo |
+| P3-4 | 提案审阅 + 用户确认 + L1 回写 | `decisions/` 提案记录；经对抗审阅与用户显式确认后回写 `templates/project/docs/engineering/` | 规则带 `source:` 标注；确认过程留痕 | done（P1-P3 已批准落地） |
+| P3-5 | eval 验证闭环 | 重跑 eval，与基线比较 | pass@1 不降（目标类别提升） | done（10/10 无回归；02/03 首轮通过） |
 
 ## Phase 4 — L2 Skill 自改进（eval 驱动 + 版本号）
 

@@ -13,5 +13,5 @@
     "09-misleading-test": {"status": "pass"},
     "10-compat-preservation": {"status": "pass"}
   },
-  "note": "baseline measured 2026-08-28 (agent: pi harness session). Final state 10/10; strict first-attempt pass@1 was 7/10 (3 tasks needed verify-feedback rework: 02, 03, 07). rounds recorded in evals/results/*.yaml. See progress/retro/2026-08-28.md."
+  "note": "baseline 2026-08-28 (10/10). 2026-08-29: L1 rules P1-P3 applied (retro-2026-08-28), full re-verify 10/10 no regression; tasks 02/03 re-run under new rules pass first-attempt. Initial strict first-attempt was 7/10; see progress/retro/2026-08-28.md."
 }
