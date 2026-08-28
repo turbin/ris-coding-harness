@@ -1,0 +1,20 @@
+schema_version: 1
+task_id: "07-convention-fit"
+milestone: "m1"
+decision: accepted
+scores:
+  correctness: 4
+  test_quality: 3
+  simplicity: 5
+  resource_safety: 5
+  convention_fit: 4
+issues:
+  - severity: MINOR
+    category: convention
+    summary: "docstring mentioning the forbidden term literally tripped a grep-based convention check; prose in docs is not code usage"
+    file: "orders.py"
+rounds: 2
+coder_red_green_evidence: false
+loc_delta: {added: 15, removed: 0}
+new_dependencies: 0
+timestamp: "2026-08-28T23:48:00+08:00"

@@ -1,0 +1,39 @@
+{
+  "pass_rate": 1.0,
+  "passed": 10,
+  "per_task": {
+    "01-off-by-one-pagination": {
+      "status": "pass"
+    },
+    "02-unbounded-cache": {
+      "status": "pass"
+    },
+    "03-missing-input-validation": {
+      "status": "pass"
+    },
+    "04-feature-from-spec": {
+      "status": "pass"
+    },
+    "05-scope-creep-trap": {
+      "status": "pass"
+    },
+    "06-refactor-duplication": {
+      "status": "pass"
+    },
+    "07-convention-fit": {
+      "status": "pass"
+    },
+    "08-repeated-execution-leak": {
+      "status": "pass"
+    },
+    "09-misleading-test": {
+      "status": "pass"
+    },
+    "10-compat-preservation": {
+      "status": "pass"
+    }
+  },
+  "schema_version": 1,
+  "timestamp": "20260828T234810",
+  "total": 10
+}

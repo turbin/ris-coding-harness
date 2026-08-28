@@ -1,0 +1,20 @@
+schema_version: 1
+task_id: "02-unbounded-cache"
+milestone: "m1"
+decision: accepted
+scores:
+  correctness: 4
+  test_quality: 3
+  simplicity: 4
+  resource_safety: 5
+  convention_fit: 4
+issues:
+  - severity: MAJOR
+    category: correctness
+    summary: "first attempt assumed dict.move_to_end exists (API assumption unverified; RED skipped); surfaced as AttributeError only at verify"
+    file: "cache.py"
+rounds: 2
+coder_red_green_evidence: false
+loc_delta: {added: 22, removed: 8}
+new_dependencies: 0
+timestamp: "2026-08-28T23:48:00+08:00"

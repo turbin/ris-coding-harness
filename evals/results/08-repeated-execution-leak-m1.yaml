@@ -1,0 +1,16 @@
+schema_version: 1
+task_id: "08-repeated-execution-leak"
+milestone: "m1"
+decision: accepted
+scores:
+  correctness: 5
+  test_quality: 4
+  simplicity: 5
+  resource_safety: 5
+  convention_fit: 5
+issues: []
+rounds: 1
+coder_red_green_evidence: false
+loc_delta: {added: 4, removed: 2}
+new_dependencies: 0
+timestamp: "2026-08-28T23:48:00+08:00"

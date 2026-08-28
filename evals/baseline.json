@@ -1,6 +1,17 @@
 {
   "schema_version": 1,
-  "pass_rate": null,
-  "per_task": {},
-  "note": "baseline not yet measured; run setup -> agent works -> verify -> update"
+  "pass_rate": 1.0,
+  "per_task": {
+    "01-off-by-one-pagination": {"status": "pass"},
+    "02-unbounded-cache": {"status": "pass"},
+    "03-missing-input-validation": {"status": "pass"},
+    "04-feature-from-spec": {"status": "pass"},
+    "05-scope-creep-trap": {"status": "pass"},
+    "06-refactor-duplication": {"status": "pass"},
+    "07-convention-fit": {"status": "pass"},
+    "08-repeated-execution-leak": {"status": "pass"},
+    "09-misleading-test": {"status": "pass"},
+    "10-compat-preservation": {"status": "pass"}
+  },
+  "note": "baseline measured 2026-08-28 (agent: pi harness session). Final state 10/10; strict first-attempt pass@1 was 7/10 (3 tasks needed verify-feedback rework: 02, 03, 07). rounds recorded in evals/results/*.yaml. See progress/retro/2026-08-28.md."
 }
