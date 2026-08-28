@@ -210,9 +210,9 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 - Agent 工作时的上下文加载顺序：`AGENTS.md` → `docs/engineering/index.md` → 任务相关规则 → Skill 角色 references（渐进式披露）。
 - 里程碑必须经 Reviewer 验收（`MILESTONE ACCEPTED`）才算完成，不允许实现阶段自我批准。
 
-> 当前版本为「单任务全自动」：每次任务需发起一次。跨任务无人值守循环（`rsi-loop`）见下方 Phase 5，尚未实施。
+> 当前版本为「单任务全自动」：每次任务需发起一次。跨任务无人值守循环（`rsi-loop`）见下方 Phase 5。
 
-### 3. RSI 自我改进闭环（Phase 0-1 已实施）
+### 3. RSI 自我改进闭环（Phase 0-5 已实施）
 
 当前版本包含 PM-Workers 静态协作协议；递归自我改进回路的完整设计见 [docs/rsi-design.md](docs/rsi-design.md)，分阶段实施：
 
@@ -220,10 +220,10 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 |---|---|---|
 | 0 | 三层自改进边界（L1 规则 / L2 Skill / L3 Harness）+ 安全门禁 | ✅ 已实施（`.rsi/policy.yaml`） |
 | 1 | 结构化 Reviewer verdict + 结果落账 `evals/results/` | ✅ 已实施（`verdict-schema.md`） |
-| 2 | eval 任务集 + pass@1 基线（RSI 的"损失函数"） | ✅ 已实施（`evals/`，10 任务 + `run-eval.sh`） |
-| 3 | retro 归因 + L1 规则回写（第一次完整闭环） | 设计完成 |
-| 4 | L2 Skill 自改进（eval 驱动） | 设计完成 |
-| 5 | `rsi-loop` skill 无人值守循环（agent 内调用，shell 仅作可选调度薄壳） | 设计完成 |
+| 2 | eval 任务集 + pass@1 基线（RSI 的"损失函数"） | ✅ 已实施（`evals/`，10 任务 + `run-eval.sh`，基线 10/10） |
+| 3 | retro 归因 + L1 规则回写（第一次完整闭环） | ✅ 已实施（`progress/retro/`、`scripts/retro-aggregate.py`、提案 P1-P3 已落地） |
+| 4 | L2 Skill 自改进（eval 驱动） | ✅ 已实施（SKILL.md v1.1.0，RED 证据最小形式，eval 验证） |
+| 5 | `rsi-loop` skill 无人值守循环（agent 内调用，shell 仅作可选调度薄壳） | ✅ 已实施（`skills/rsi-loop/`、`run-loop.sh`、`scripts/rsi-protect.sh`，observe-only 5 轮试跑） |
 
 核心原则：任何自改进变更必须经 eval 验证不退化才可合并；eval 任务集与评分脚本列入 protected files，永不自动变异；一切变异走 git 提交，可逐轮回滚。
 
