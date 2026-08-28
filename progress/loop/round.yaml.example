@@ -1,0 +1,20 @@
+# rsi-loop round report — written by the orchestrator after each round.
+# Schema mirrors skills/rsi-loop/references/round-protocol.md.
+round: 1
+task_id: "example-task-01"
+gate: observe-only
+decision: accepted           # accepted | rejected | no-verdict
+verdict_file: "evals/results/example-task-01-m1.yaml"
+scores:
+  correctness: 5
+  test_quality: 4
+  simplicity: 5
+  resource_safety: 5
+  convention_fit: 4
+issues: []                   # issue summaries surfaced this round
+rounds: 1                    # adversarial round-trips inside the task
+coder_red_green_evidence: true
+loc_delta: {added: 12, removed: 3}
+mutations: []                # proposal IDs applied this round (observe-only: always [])
+eval_after: null             # "results/eval-<ts>.json (pass@1 x/y)" when re-run
+timestamp: "2026-08-29T08:00:00+08:00"

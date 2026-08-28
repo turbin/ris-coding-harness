@@ -196,11 +196,11 @@ try {
     Write-Host ("write  {0}" -f (Get-RelPath $Dst))
   }
 
-  function Install-SkillTo([string]$Dest) {
-    $SkillSrcPath = Join-Path $SourceRoot "skills/pm-workers-engineering"
+  function Install-SkillTo([string]$Dest, [string]$SkillSrcPath) {
+    $SkillName = Split-Path -Leaf $SkillSrcPath
     Get-ChildItem $SkillSrcPath -Recurse -File | ForEach-Object {
       $rel = $_.FullName.Substring($SkillSrcPath.Length).TrimStart('\', '/')
-      Managed-Copy $_.FullName (Join-Path $Dest ("pm-workers-engineering/" + $rel))
+      Managed-Copy $_.FullName (Join-Path $Dest ($SkillName + "/" + $rel))
     }
   }
 
@@ -224,8 +224,11 @@ try {
   }
 
   if (-not $NoSkill) {
-    foreach ($dest in $SkillDests) {
-      Install-SkillTo $dest
+    $SkillsRoot = Join-Path $SourceRoot "skills"
+    foreach ($skillDir in (Get-ChildItem $SkillsRoot -Directory)) {
+      foreach ($dest in $SkillDests) {
+        Install-SkillTo $dest $skillDir.FullName
+      }
     }
   }
 
@@ -325,7 +328,7 @@ Thumbs.db
   Write-Host "Agent entry: AGENTS.md"
   if (-not $NoSkill) {
     foreach ($d in $SkillDests) {
-      Write-Host ("Skill entry: " + (Get-RelPath (Join-Path $d "pm-workers-engineering/SKILL.md")))
+      Write-Host ("Skills: " + (Get-RelPath (Join-Path $d "{pm-workers-engineering,rsi-loop}/SKILL.md")))
     }
   }
 }

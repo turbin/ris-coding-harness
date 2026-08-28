@@ -1,0 +1,14 @@
+round: 2
+task_id: "02-unbounded-cache"
+gate: observe-only
+decision: accepted
+verdict_file: "evals/results/02-unbounded-cache-m1.yaml"
+scores: {correctness: 5, test_quality: 5, simplicity: 5, resource_safety: 5, convention_fit: 5}
+issues: []
+rounds: 1
+coder_red_green_evidence: true
+loc_delta: {added: 22, removed: 8}
+mutations: []
+eval_after: null
+timestamp: "2026-08-29T07:32:00+08:00"
+note: "demo round reconstructed from baseline evidence; first attempt under baseline run needed rework (see retro 2026-08-28 pattern 2)"

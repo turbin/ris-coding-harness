@@ -1,0 +1,14 @@
+round: 5
+task_id: "05-scope-creep-trap"
+gate: observe-only
+decision: accepted
+verdict_file: "evals/results/05-scope-creep-trap-m1.yaml"
+scores: {correctness: 5, test_quality: 4, simplicity: 5, resource_safety: 5, convention_fit: 5}
+issues: []
+rounds: 1
+coder_red_green_evidence: false
+loc_delta: {added: 0, removed: 0}
+mutations: []
+eval_after: null
+timestamp: "2026-08-29T07:35:00+08:00"
+note: "demo round reconstructed from baseline evidence"

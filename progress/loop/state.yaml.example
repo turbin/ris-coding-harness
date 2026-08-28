@@ -1,0 +1,22 @@
+# rsi-loop state — copy to progress/loop/state.yaml at loop start.
+# Every round updates this file. Gate level is a call parameter, written here.
+schema_version: 1
+loop_id: "2026-08-29-loop-01"
+gate: observe-only          # observe-only | l1-auto | all-manual
+rounds_requested: 5
+rounds_done: 0
+queue_file: "progress/loop/tasks.yaml"
+queue_position: 0
+started_at: "2026-08-29T08:00:00+08:00"
+last_round_at: null
+pause: false                # human interruption flag
+counters:
+  accepted: 0
+  rejected: 0
+  no_red_evidence: 0
+  issues_by_category: {}    # {category: count}
+  proposals_landed: []      # proposal IDs
+  evals: []                 # results files written during the loop
+metrics:
+  last_pass_rate: null
+  baseline_pass_rate: null

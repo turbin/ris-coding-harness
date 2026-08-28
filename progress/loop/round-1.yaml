@@ -1,0 +1,14 @@
+round: 1
+task_id: "01-off-by-one-pagination"
+gate: observe-only
+decision: accepted
+verdict_file: "evals/results/01-off-by-one-pagination-m1.yaml"
+scores: {correctness: 5, test_quality: 4, simplicity: 5, resource_safety: 5, convention_fit: 5}
+issues: []
+rounds: 1
+coder_red_green_evidence: false
+loc_delta: {added: 1, removed: 1}
+mutations: []
+eval_after: null
+timestamp: "2026-08-29T07:31:00+08:00"
+note: "demo round reconstructed from baseline evidence"

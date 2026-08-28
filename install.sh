@@ -175,16 +175,20 @@ done
 
 install_skill_to() {
   dest="$1"
+  skill_src="$2"
+  skill_name="$(basename "$skill_src")"
   while IFS= read -r -d '' f; do
-    rel="${f#$SKILL_SRC/}"
-    managed_copy "$f" "$dest/pm-workers-engineering/$rel"
-  done < <(find "$SKILL_SRC" -type f -print0)
+    rel="${f#$skill_src/}"
+    managed_copy "$f" "$dest/$skill_name/$rel"
+  done < <(find "$skill_src" -type f -print0)
 }
 
 if [ "$INSTALL_SKILL" -eq 1 ]; then
-  SKILL_SRC="$SOURCE_ROOT/skills/pm-workers-engineering"
-  for dest in "${SKILL_DESTS[@]}"; do
-    install_skill_to "$dest"
+  for skill_src in "$SOURCE_ROOT"/skills/*/; do
+    [ -d "$skill_src" ] || continue
+    for dest in "${SKILL_DESTS[@]}"; do
+      install_skill_to "$dest" "${skill_src%/}"
+    done
   done
 fi
 
@@ -279,6 +283,6 @@ echo "Next: fill docs/engineering/index.md and only the rule files relevant to t
 echo "Agent entry: AGENTS.md"
 if [ "$INSTALL_SKILL" -eq 1 ]; then
   for dest in "${SKILL_DESTS[@]}"; do
-    echo "Skill entry: ${dest#$TARGET/}/pm-workers-engineering/SKILL.md"
+    echo "Skills: ${dest#$TARGET/}/{pm-workers-engineering,rsi-loop}/SKILL.md"
   done
 fi

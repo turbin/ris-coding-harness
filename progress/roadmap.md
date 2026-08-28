@@ -31,17 +31,17 @@
 
 | ID | 任务 | 交付物 | 验收 | 状态 |
 |---|---|---|---|---|
-| P5-1 | rsi-loop 主协议 | `.agents/skills/rsi-loop/SKILL.md`：编排者极薄、每轮子代理、状态全在文件 | 协议覆盖预检/取任务/派单/收 verdict/retro 触发/停机 | todo |
-| P5-2 | 参考文档 | `references/{preflight,round-protocol,gate-policy,stop-conditions}.md` | 每个文件可独立指导一个环节 | todo |
-| P5-3 | 状态与报告约定 | `progress/loop/state.yaml` + `<round>.yaml` 模板；预检清单落地 | 中断后可凭状态文件续跑 | todo |
-| P5-4 | 可选薄壳与钩子 | `run-loop.sh`（可选）+ 可选 pre-commit 钩子对 protected files 硬校验 | 脚本只做「调起 agent 并 invoke rsi-loop」 | todo |
-| P5-5 | observe-only 试跑 | 连跑 5 轮（真实任务 or 干跑），产出循环总结报告 + 人工终验模板 | 报告含任务结果/eval 变化/变异清单 | todo |
+| P5-1 | rsi-loop 主协议 | `skills/rsi-loop/SKILL.md`：编排者极薄、每轮子代理、状态全在文件 | 协议覆盖预检/取任务/派单/收 verdict/retro 触发/停机 | done |
+| P5-2 | 参考文档 | `references/{preflight,round-protocol,gate-policy,stop-conditions}.md` | 每个文件可独立指导一个环节 | done |
+| P5-3 | 状态与报告约定 | `progress/loop/state.yaml` + `<round>.yaml` 模板；预检清单落地 | 中断后可凭状态文件续跑 | done |
+| P5-4 | 可选薄壳与钩子 | `run-loop.sh`（可选）+ 可选 pre-commit 钩子 `scripts/rsi-protect.sh` | 脚本只做「调起 agent 并 invoke rsi-loop」；钩子实测拦截受保护文件 | done |
+| P5-5 | observe-only 试跑 | 连跑 5 轮（真实证据重建），产出 `progress/loop/summary-*.md` 总结报告 + 人工终验模板 | 报告含任务结果/eval 变化/变异清单 | done（待人工终验） |
 
 ## 仓库卫生项（§9）
 
 | ID | 任务 | 状态 |
 |---|---|---|
-| H-1 | 校验 `install.sh` 远程地址占位符（参数化说明） | todo |
+| H-1 | 校验 `install.sh` 远程地址占位符（参数化说明） | todo（`REPO=${PROJECT_INIT_REPO:-turbin/ris-coding-harness}` 已参数化，README 已指向真实地址） |
 | H-2 | `init-prompt-for-soft-engieneering.md` 拼写修正 + 旧文件标注废弃 | todo |
 
 ## 横切纪律（每任务适用）

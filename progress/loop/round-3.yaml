@@ -1,0 +1,14 @@
+round: 3
+task_id: "03-missing-input-validation"
+gate: observe-only
+decision: accepted
+verdict_file: "evals/results/03-missing-input-validation-m1.yaml"
+scores: {correctness: 5, test_quality: 5, simplicity: 5, resource_safety: 5, convention_fit: 5}
+issues: []
+rounds: 1
+coder_red_green_evidence: true
+loc_delta: {added: 14, removed: 4}
+mutations: []
+eval_after: null
+timestamp: "2026-08-29T07:33:00+08:00"
+note: "demo round reconstructed from baseline evidence; first attempt under baseline run needed rework (see retro 2026-08-28 pattern 2)"
