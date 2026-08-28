@@ -1,7 +1,7 @@
 ---
 name: pm-workers-engineering
 description: A project-agnostic PM-Workers software-engineering skill that coordinates PM, Coder, and Reviewer roles, uses TDD and adversarial review, and progressively loads project-specific engineering rules from the repository. Use whenever the user asks to develop in PM-Workers mode — e.g. mentions "pm-workers", "PM-Workers 模式", "pm-workers 开发模式", "PM 模式开发", or requests PM/Coder/Reviewer multi-role development, milestone-gated TDD, or adversarial review workflows.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # PM-Workers Engineering Skill
@@ -265,6 +265,16 @@ Capture:
 - actual result;
 - why the failure demonstrates the gap.
 
+Minimal RED evidence (applies even when an external machine check — eval
+verifier, CI gate, test harness — already exists):
+
+- a failing test or a minimal reproduction script for the missing/broken
+  behavior, with its failure output recorded **before** implementation;
+- external checks do not substitute for RED: they verify the deliverable,
+  not the coder's understanding of the gap;
+- behavior-preserving refactors are exempt, but must start from a GREEN
+  baseline.
+
 ## GREEN
 
 Implement the minimum change needed to satisfy the failing condition.
@@ -314,6 +324,9 @@ Default stance:
 Reviewer challenges:
 
 - correctness and edge cases;
+- RED evidence credibility: was the failing condition recorded before
+  implementation, or reconstructed after the fact? (verdict field
+  `coder_red_green_evidence` must reflect the former, not the latter);
 - hidden side effects;
 - architecture/module boundaries;
 - regression risk;
