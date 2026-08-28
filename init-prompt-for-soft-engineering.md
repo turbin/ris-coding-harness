@@ -1,13 +1,5 @@
 # 代码开发工程初始化
 
-> **废弃（deprecated）**：本文件名拼写有误（engieneering → engineering）。
-> 请使用 [`init-prompt-for-soft-engineering.md`](init-prompt-for-soft-engineering.md)。
-> 兼容期内保留本文件，后续将删除。
-
----
-
-# 代码开发工程初始化
-
 该工程初始化方式已从“大型初始化 Prompt”迁移为可重复执行的安装器。
 
 推荐直接运行：

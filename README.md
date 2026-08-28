@@ -260,7 +260,7 @@ pwsh ./tests/install-smoke.ps1  # Windows（PowerShell 5.1+ / pwsh 7+）
 
 ## 旧入口
 
-`init-prompt-for-soft-engieneering.md` 和 `team-launcher` 保留用于兼容旧工作流；新工程建议直接使用 `install.sh`。
+`init-prompt-for-soft-engieneering.md`（已废弃，见 `init-prompt-for-soft-engineering.md`）和 `team-launcher` 保留用于兼容旧工作流；新工程建议直接使用 `install.sh`。
 
 ## 许可证
 

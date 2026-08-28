@@ -42,7 +42,7 @@
 | ID | 任务 | 状态 |
 |---|---|---|
 | H-1 | 校验 `install.sh` 远程地址占位符（参数化说明） | todo（`REPO=${PROJECT_INIT_REPO:-turbin/ris-coding-harness}` 已参数化，README 已指向真实地址） |
-| H-2 | `init-prompt-for-soft-engieneering.md` 拼写修正 + 旧文件标注废弃 | todo |
+| H-2 | `init-prompt-for-soft-engieneering.md` 拼写修正 + 旧文件标注废弃 | done（新文件 + 旧文件废弃标注 + README 同步） |
 
 ## 横切纪律（每任务适用）
 
