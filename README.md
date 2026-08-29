@@ -229,6 +229,19 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 
 运行环境配置：`run-loop.sh` 按 `--agent-cmd` → `RSI_AGENT_CMD` → `RSI_AGENT_CANDIDATES`（环境变量或 `progress/loop/agent.env`）→ 内置默认列表 的顺序选择 agent CLI；只把本机实际可用的 agent 列入候选（本仓库即 `progress/loop/agent.env` 的 `RSI_AGENT_CANDIDATES="pi kimi"`）。无人值守场景用 `--headless`（pi 走 `-p`，kimi 走 `-p --print`）。
 
+### 4. 最小闭环（Min-Loop）—— 轻量 spec 执行闭环
+
+完整 RSI 机制（rsi-loop）的**零配置替代**：token 预算有限、只需要「spec → 验收 → 报告」闭环的真实工程，不需要 eval / retro / skill 进化。
+
+- **入口（skill 优先）**：`min-loop` skill。对话触发词：「最小闭环」「min-loop」「跑 spec」。
+  - pi：`/skill:min-loop docs/specs/xxx.md`
+  - 其他 agent（kimi/claude/opencode/codex）：提示词中显式指定 SKILL.md 路径
+- **机制**：同一 agent 会话内按序扮演 PM → Coder(TDD: RED→GREEN) → Reviewer（对抗审阅），达到 `MILESTONE ACCEPTED` 后写报告 `output/specs/<spec>.md` 并汇报 DONE / PARTIAL / BLOCKED。
+- **批处理（可选）**：`./run-specs.sh` 遍历 `docs/specs/*.md`，headless 逐个调用（agent 解析同 `run-loop.sh`：`--agent-cmd` / `RSI_AGENT_CMD` / `RSI_AGENT_CANDIDATES`）。
+- **零机制承诺**：无子代理、无 state/round/verdict 文件、无 eval、无 retro、无门禁回写；停机条件最小集（build/test 命令未知或验收不可判定时停下询问，不臆造）。
+- **与 rsi-loop 的关系**：rsi-loop 的每一轮子代理工作 ≈ 一次 min-loop；min-loop 只交付、不进化，是 rsi-loop 的最小切片。
+- **实现分支**：本仓库 `feat/min-loop` 分支承载最小闭环的完整实现（`skills/min-loop/SKILL.md` + `run-specs.sh` + 安装分发）；**main 分支当前不包含该代码**，本章节为说明入口，使用前请 `git checkout feat/min-loop`（或将其合并回 main 后此处同步更新）。
+
 ## 设计原则
 
 ### 1. Skill 与工程规则分离
