@@ -1,0 +1,39 @@
+{
+  "pass_rate": 0.1,
+  "passed": 1,
+  "per_task": {
+    "11-concurrency-shared-state": {
+      "status": "fail"
+    },
+    "12-compat-legacy-format": {
+      "status": "fail"
+    },
+    "13-simplicity-overengineering": {
+      "status": "fail"
+    },
+    "14-resource-handle-leak": {
+      "status": "fail"
+    },
+    "15-weak-test-regression": {
+      "status": "fail"
+    },
+    "16-date-boundary": {
+      "status": "fail"
+    },
+    "17-performance-quadratic": {
+      "status": "pass"
+    },
+    "18-convention-discipline": {
+      "status": "fail"
+    },
+    "19-money-rounding": {
+      "status": "fail"
+    },
+    "20-class-state-leak": {
+      "status": "fail"
+    }
+  },
+  "schema_version": 1,
+  "timestamp": "20260829T080401",
+  "total": 10
+}

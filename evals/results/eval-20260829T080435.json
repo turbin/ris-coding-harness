@@ -1,0 +1,12 @@
+{
+  "pass_rate": 0.0,
+  "passed": 0,
+  "per_task": {
+    "11-concurrency-shared-state": {
+      "status": "fail"
+    }
+  },
+  "schema_version": 1,
+  "timestamp": "20260829T080435",
+  "total": 1
+}

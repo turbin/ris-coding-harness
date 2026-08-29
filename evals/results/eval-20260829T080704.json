@@ -1,6 +1,6 @@
 {
-  "note": "2026-08-29: eval suite expanded 10->20 (human-approved L3 expansion). Baseline 20/20 pass@1=1.00. New tasks cover concurrency/compat/simplicity/resource/testing/perf/money/state-isolation gaps. See decisions/2026-08-29-eval-expansion.md.",
   "pass_rate": 1.0,
+  "passed": 20,
   "per_task": {
     "01-off-by-one-pagination": {
       "status": "pass"
@@ -63,5 +63,7 @@
       "status": "pass"
     }
   },
-  "schema_version": 1
+  "schema_version": 1,
+  "timestamp": "20260829T080704",
+  "total": 20
 }

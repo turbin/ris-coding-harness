@@ -254,14 +254,14 @@ skill 结构：
 
 ## 7. 分阶段实施路线
 
-| Phase | 内容 | 验收标准 |
-|---|---|---|
-| 0 | 定义三层边界、protected files、change budget；git 快照约定 | 文档落地，安装器模板同步 |
-| 1 | verdict schema + Reviewer 输出改造 + `evals/results/` 落账 | 跑一个真实任务产出合规 verdict |
-| 2 | eval 任务集（≥10 个任务）+ `run-eval.sh` + 基线 | 能跑出可复现的 pass@1 |
-| 3 | retro 机制 + L1 规则回写（人工批准） | 完成一次「失败→归因→规则变更→eval 验证」全闭环 |
-| 4 | L2 Skill 自改进（eval 驱动 + 版本号） | 一次 SKILL.md 变更有 eval 证据支撑 |
-| 5 | `rsi-loop` skill 无人值守循环（可选 shell 薄壳供 cron/CI） | `--gate observe-only` 连跑 5 轮产出完整报告 |
+| Phase | 内容 | 验收标准 | 状态 |
+|---|---|---|---|
+| 0 | 定义三层边界、protected files、change budget；git 快照约定 | 文档落地，安装器模板同步 | ✅ 已实施 |
+| 1 | verdict schema + Reviewer 输出改造 + `evals/results/` 落账 | 跑一个真实任务产出合规 verdict | ✅ 已实施 |
+| 2 | eval 任务集（≥10 个任务）+ `run-eval.sh` + 基线 | 能跑出可复现的 pass@1 | ✅ 已实施（基线 10/10，2026-08-28 实测） |
+| 3 | retro 机制 + L1 规则回写（人工批准） | 完成一次「失败→归因→规则变更→eval 验证」全闭环 | ✅ 已实施（2026-08-28/29，提案 P1-P3 落地） |
+| 4 | L2 Skill 自改进（eval 驱动 + 版本号） | 一次 SKILL.md 变更有 eval 证据支撑 | ✅ 已实施（v1.1.0，RED 证据最小形式） |
+| 5 | `rsi-loop` skill 无人值守循环（可选 shell 薄壳供 cron/CI） | `--gate observe-only` 连跑 5 轮产出完整报告 | ✅ 已实施（`skills/rsi-loop/` + `run-loop.sh`，5 轮试跑，2026-08-29 人工终验通过） |
 
 每个 Phase 独立可交付、可暂停。Phase 0-2 是纯增量（只加不改），风险接近零；Phase 3 是第一个真正意义上的「自我改进」。
 

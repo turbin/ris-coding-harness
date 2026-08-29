@@ -37,6 +37,12 @@
 | P5-4 | 可选薄壳与钩子 | `run-loop.sh`（可选）+ 可选 pre-commit 钩子 `scripts/rsi-protect.sh` | 脚本只做「调起 agent 并 invoke rsi-loop」；钩子实测拦截受保护文件 | done |
 | P5-5 | observe-only 试跑 | 连跑 5 轮（真实证据重建），产出 `progress/loop/summary-*.md` 总结报告 + 人工终验模板 | 报告含任务结果/eval 变化/变异清单 | done（待人工终验） |
 
+## 演进任务（用户 2026-08-29 批准）
+
+| ID | 任务 | 状态 |
+|---|---|---|
+| E-1 | eval 任务集扩充 10 → 20（补齐 concurrency/compat/simplicity/resource/testing/perf/money 类别） | done（`decisions/2026-08-29-eval-expansion.md`，全量 20/20，基线更新） |
+
 ## 仓库卫生项（§9）
 
 | ID | 任务 | 状态 |
