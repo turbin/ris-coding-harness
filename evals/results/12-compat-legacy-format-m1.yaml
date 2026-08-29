@@ -3,7 +3,11 @@ task_id: "12-compat-legacy-format"
 milestone: "m1"
 decision: accepted
 scores:
-  correctness: 5, test_quality: 4, simplicity: 5, resource_safety: 5, convention_fit: 5
+  correctness: 5
+  test_quality: 4
+  simplicity: 5
+  resource_safety: 5
+  convention_fit: 5
 issues: []
 rounds: 1
 coder_red_green_evidence: false

@@ -3,7 +3,11 @@ task_id: "19-money-rounding"
 milestone: "m1"
 decision: accepted
 scores:
-  correctness: 5, test_quality: 4, simplicity: 3, resource_safety: 5, convention_fit: 4
+  correctness: 5
+  test_quality: 4
+  simplicity: 3
+  resource_safety: 5
+  convention_fit: 4
 issues: []
 rounds: 1
 coder_red_green_evidence: false
