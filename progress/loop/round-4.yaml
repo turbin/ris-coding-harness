@@ -1,0 +1,20 @@
+# rsi-loop round report — loop-real-01, written by orchestrator after round.
+round: 4
+task_id: "14-resource-handle-leak"
+gate: observe-only
+decision: accepted
+verdict_file: "evals/results/14-resource-handle-leak-m1.yaml"
+scores:
+  correctness: 5
+  test_quality: 5
+  simplicity: 5
+  resource_safety: 5
+  convention_fit: 5
+issues: []
+rounds: 1
+coder_red_green_evidence: true
+loc_delta: {added: 107, removed: 0}
+mutations: []
+eval_after: "results/eval-20260829T082437.json (pass@1 1/1)"
+timestamp: "2026-08-29T08:23:10+08:00"
+agent: "pi (headless, deepseek-v4-flash)"

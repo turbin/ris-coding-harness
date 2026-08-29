@@ -1,16 +1,22 @@
 schema_version: 1
 task_id: "11-concurrency-shared-state"
 milestone: "m1"
+origin: protocol
 decision: accepted
 scores:
   correctness: 5
-  test_quality: 4
+  test_quality: 5
   simplicity: 5
-  resource_safety: 4
+  resource_safety: 5
   convention_fit: 5
-issues: []
+issues:
+  - severity: NIT
+    category: concurrency
+    summary: "is_taken/reserved_count read _seats without the lock; intentional (GIL-atomic dict reads, requirement targets reserve exactly-once), not acceptance-blocking"
+    file: "seats.py"
 rounds: 1
-coder_red_green_evidence: false
-loc_delta: {added: 10, removed: 2}
+coder_red_green_evidence: true
+loc_delta: {added: 76, removed: 5}
 new_dependencies: 0
-timestamp: "2026-08-29T08:07:00+08:00"
+timestamp: "2026-08-29T08:17:30+08:00"
+note: "RED captured pre-implementation on untouched seats.py (md5 b19180fc92e44f55684c827cdc5cc705): 32 barrier-synchronized threads all won seat 'A1' (AssertionError 32 != 1). Fix: module-level threading.Lock serializing check-and-set; simulated-work sleep moved outside critical section (lock hold O(1)). GREEN: 3 tests OK, 8 fresh-process repeats + 5 in-process 40-thread hammering rounds all exactly-one-winner. loc_delta: seats.py +8/-5, new test_seats.py +68."

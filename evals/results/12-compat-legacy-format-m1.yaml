@@ -1,16 +1,18 @@
 schema_version: 1
 task_id: "12-compat-legacy-format"
 milestone: "m1"
+origin: protocol
 decision: accepted
 scores:
   correctness: 5
-  test_quality: 4
+  test_quality: 5
   simplicity: 5
   resource_safety: 5
   convention_fit: 5
 issues: []
 rounds: 1
-coder_red_green_evidence: false
-loc_delta: {added: 1, removed: 1}
+coder_red_green_evidence: true
+loc_delta: {added: 45, removed: 1}
 new_dependencies: 0
-timestamp: "2026-08-29T08:07:00+08:00"
+timestamp: "2026-08-29T08:18:52+08:00"
+note: "RED captured pre-implementation on untouched records.py (md5 e68832494df805921cde2d8e99eafb6d): parse('{\"name\": \"alice\"}') raised KeyError: 'region' at the data['region'] subscript (5/6 tests passed; the failing one precisely pinpoints the legacy gap). Fix: data['region'] -> data.get('region', ''), mirroring the existing .get pattern already used by serialize. GREEN: 6/6 unittest OK plus property sweep (round-trip with empty/non-empty/unicode/quoted names; legacy parse with reversed key order). Signatures unchanged; stdlib only (json/unittest). loc_delta: records.py 1 line changed, new test_records.py +44."
