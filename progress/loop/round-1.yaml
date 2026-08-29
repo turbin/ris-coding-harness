@@ -21,3 +21,5 @@ mutations: []
 eval_after: "results/eval-20260829T081759.json (pass@1 1/1)"
 timestamp: "2026-08-29T08:17:59+08:00"
 agent: "pi (headless, deepseek-v4-flash)"
+trace_file: "traces/round-1-11-concurrency-shared-state.pi.jsonl"
+trace_note: "backfilled from machine agent session store (P6, 2026-08-29); new rounds capture traces at spawn time"

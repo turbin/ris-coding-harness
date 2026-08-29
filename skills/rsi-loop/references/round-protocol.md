@@ -14,12 +14,20 @@ itself (context isolation; identical guarantees to a shell-per-round model).
              - task context: where the sandbox/worktree lives
              - gate level (from state.yaml) — the sub-agent must know
                whether mutation is allowed this round
+             - trace capture (P6): save the sub-agent's full execution trace
+               to `progress/loop/traces/round-<n>-<task-id>.<agent>`
+               (pi: `--session-dir progress/loop/traces/` or copy the session
+               file after the run; kimi: copy `~/.kimi/sessions/<id>/`;
+               others: save the equivalent session store, or tee the output
+               stream to `round-<n>-<task-id>.log`). A round without a trace
+               is INVALID — same severity as a missing verdict.
 3. COLLECT   from the sub-agent's report:
              - structured verdict (evals/results/<task-id>-<milestone>.yaml)
              - issues recorded (issues/ or project tracker)
              - diff stats (changed files, added/removed lines, deps)
              - RED evidence status (verdict field)
-4. RECORD    write progress/loop/round-<n>.yaml (see round.yaml.example)
+4. RECORD    write progress/loop/round-<n>.yaml (see round.yaml.example),
+             including `trace_file` referencing the captured trace
 5. UPDATE    state.yaml: rounds_done++, counters (accepted/rejected,
              issues by category, eval results), queue position
 6. RETRO?    judge triggers (docs/rsi-design.md §4.3):
@@ -63,7 +71,11 @@ The sub-agent must return (per `pm-workers-engineering`):
   explicitly deferred).
 
 The orchestrator validates the verdict file exists and is schema-conformant
-before recording the round; missing verdict = round failed.
+before recording the round; missing verdict = round failed. The round's
+execution trace must exist under `progress/loop/traces/` and be referenced
+by `trace_file` in the round report; missing trace = round failed (P6,
+retro-2026-08-29) — verdicts without traces cannot be audited, and real
+project tasks have no machine judge to substitute for the trace.
 
 ## Round report (progress/loop/round-<n>.yaml)
 
@@ -78,6 +90,7 @@ issues: []
 rounds: 1
 coder_red_green_evidence: true
 loc_delta: {added: 12, removed: 3}
+trace_file: "traces/round-1-example-task-01.pi.jsonl"   # required (P6)
 mutations: []            # proposal IDs applied this round (empty in observe-only)
 eval_after: "results/eval-<ts>.json (pass@1 x/y)"   # when eval was re-run
 timestamp: "2026-08-29T08:00:00+08:00"

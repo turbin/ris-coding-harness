@@ -18,3 +18,5 @@ mutations: []
 eval_after: "results/eval-20260829T082607.json (pass@1 1/1)"
 timestamp: "2026-08-29T08:26:07+08:00"
 agent: "kimi (headless print mode)"
+trace_file: "traces/round-5-15-weak-test-regression.kimi/"
+trace_note: "backfilled from machine agent session store (P6, 2026-08-29); new rounds capture traces at spawn time"

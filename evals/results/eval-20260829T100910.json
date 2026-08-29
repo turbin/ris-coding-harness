@@ -1,0 +1,69 @@
+{
+  "pass_rate": 1.0,
+  "passed": 20,
+  "per_task": {
+    "01-off-by-one-pagination": {
+      "status": "pass"
+    },
+    "02-unbounded-cache": {
+      "status": "pass"
+    },
+    "03-missing-input-validation": {
+      "status": "pass"
+    },
+    "04-feature-from-spec": {
+      "status": "pass"
+    },
+    "05-scope-creep-trap": {
+      "status": "pass"
+    },
+    "06-refactor-duplication": {
+      "status": "pass"
+    },
+    "07-convention-fit": {
+      "status": "pass"
+    },
+    "08-repeated-execution-leak": {
+      "status": "pass"
+    },
+    "09-misleading-test": {
+      "status": "pass"
+    },
+    "10-compat-preservation": {
+      "status": "pass"
+    },
+    "11-concurrency-shared-state": {
+      "status": "pass"
+    },
+    "12-compat-legacy-format": {
+      "status": "pass"
+    },
+    "13-simplicity-overengineering": {
+      "status": "pass"
+    },
+    "14-resource-handle-leak": {
+      "status": "pass"
+    },
+    "15-weak-test-regression": {
+      "status": "pass"
+    },
+    "16-date-boundary": {
+      "status": "pass"
+    },
+    "17-performance-quadratic": {
+      "status": "pass"
+    },
+    "18-convention-discipline": {
+      "status": "pass"
+    },
+    "19-money-rounding": {
+      "status": "pass"
+    },
+    "20-class-state-leak": {
+      "status": "pass"
+    }
+  },
+  "schema_version": 1,
+  "timestamp": "20260829T100910",
+  "total": 20
+}

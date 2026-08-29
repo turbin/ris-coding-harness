@@ -18,3 +18,5 @@ mutations: []
 eval_after: "results/eval-20260829T081910.json (pass@1 1/1)"
 timestamp: "2026-08-29T08:19:40+08:00"
 agent: "pi (headless, deepseek-v4-flash)"
+trace_file: "traces/round-2-12-compat-legacy-format.pi.jsonl"
+trace_note: "backfilled from machine agent session store (P6, 2026-08-29); new rounds capture traces at spawn time"

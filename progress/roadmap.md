@@ -44,6 +44,8 @@
 | E-1 | eval 任务集扩充 10 → 20（补齐 concurrency/compat/simplicity/resource/testing/perf/money 类别） | done（`decisions/2026-08-29-eval-expansion.md`，全量 20/20，基线更新） |
 | E-2 | 第二轮 retro（20 任务，N=5 触发）：报告 + 提案 P4（L3 verdict schema 校验器）/ P5（L2 verdict origin 字段） | done（提案已确认并落地：`decisions/2026-08-29-P4-P5.md`，20/20 回归无退化） |
 | E-3 | 真实子代理轮（observe-only，agent 候选 pi/kimi，含 kimi 首个多 agent 数据点） | done（loop-real-01：5/5 机器判定 PASS，5 条 `origin: protocol` verdict 替换自记书签，零变异；待人工终验） |
+| E-4 | P6 trace execution 落库：子代理执行轨迹入仓 + 协议强制（无轨迹=轮次无效）+ loop-real-01 回填 | done（`decisions/2026-08-29-P6.md`，rsi-loop v1.1.0，20/20 回归无退化） |
+| E-5 | 真实工程试点（`install.sh --mode adopt` 到真实仓库 + 真实任务） | 用户主导，待执行（用户 2026-08-29：将应用到真实项目中观察） |
 
 ## 仓库卫生项（§9）
 

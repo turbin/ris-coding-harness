@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "approval": {
+    "yolo": false,
+    "afk": false,
+    "auto_approve_actions": []
+  },
+  "additional_dirs": [],
+  "custom_title": "你是 RSI eval 轮次的施工子代理（observe-only 门禁）。 1. 先完整阅读…",
+  "title_generated": false,
+  "title_generate_attempts": 0,
+  "plan_mode": false,
+  "plan_session_id": null,
+  "plan_slug": null,
+  "wire_mtime": null,
+  "archived": false,
+  "archived_at": null,
+  "auto_archive_exempt": false,
+  "todos": [
+    {
+      "title": "Capture baseline: run existing weak tests on buggy code",
+      "status": "done"
+    },
+    {
+      "title": "Add exact-frequency test and record RED evidence on buggy code",
+      "status": "done"
+    },
+    {
+      "title": "Fix count_words bug and run tests (GREEN)",
+      "status": "done"
+    },
+    {
+      "title": "Reviewer adversarial self-review and verdict",
+      "status": "done"
+    },
+    {
+      "title": "Write verdict YAML and final report",
+      "status": "done"
+    }
+  ]
+}

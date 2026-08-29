@@ -19,6 +19,7 @@ the loop's mutations are only auditable when the starting point is known.
 | 8 | Gate level valid | gate is one of `observe-only` / `l1-auto` / `all-manual` (see `gate-policy.md`) |
 | 9 | Results dir present | `evals/results/` exists and is writable |
 | 10 | Verdicts parse & schema-valid (P4) | `python3 scripts/retro-aggregate.py --dry` style check: every `evals/results/<task>-<milestone>.yaml` parses as YAML and conforms to verdict schema v1 — run `python3 scripts/retro-aggregate.py` and require exit 0 (it aborts listing ALL invalid files) |
+| 11 | Traces dir writable (P6) | `progress/loop/traces/` exists and is writable — sub-agent execution traces land here every round; no trace = round invalid |
 
 ## Failure handling
 
