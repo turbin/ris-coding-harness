@@ -283,6 +283,6 @@ echo "Next: fill docs/engineering/index.md and only the rule files relevant to t
 echo "Agent entry: AGENTS.md"
 if [ "$INSTALL_SKILL" -eq 1 ]; then
   for dest in "${SKILL_DESTS[@]}"; do
-    echo "Skills: ${dest#$TARGET/}/{pm-workers-engineering,rsi-loop}/SKILL.md"
+    echo "Skills: ${dest#$TARGET/}/{pm-workers-engineering,rsi-loop,min-loop}/SKILL.md"
   done
 fi
