@@ -1,6 +1,7 @@
 schema_version: 1
 task_id: "03-missing-input-validation"
 milestone: "m1"
+origin: manual
 decision: accepted
 scores:
   correctness: 5

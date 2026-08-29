@@ -1,7 +1,7 @@
 ---
 name: pm-workers-engineering
 description: A project-agnostic PM-Workers software-engineering skill that coordinates PM, Coder, and Reviewer roles, uses TDD and adversarial review, and progressively loads project-specific engineering rules from the repository. Use whenever the user asks to develop in PM-Workers mode — e.g. mentions "pm-workers", "PM-Workers 模式", "pm-workers 开发模式", "PM 模式开发", or requests PM/Coder/Reviewer multi-role development, milestone-gated TDD, or adversarial review workflows.
-version: 1.1.0
+version: 1.2.0
 ---
 
 # PM-Workers Engineering Skill

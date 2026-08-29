@@ -51,6 +51,10 @@ timestamp: "2026-08-27T10:41:00+08:00"
 - `task_id` (string, required) — the PM-assigned task ID; used to join verdicts belonging to the same task.
 - `milestone` (string, required) — milestone identifier within the task; together with `task_id` it determines the file name.
 - `decision` (enum, required) — `accepted` or `rejected`. Mirrors the natural-language `MILESTONE ACCEPTED` / `MILESTONE REJECTED` decision.
+- `origin` (enum, optional, default `manual`) — how this verdict was produced:
+  - `protocol` — a real rsi-loop round: cold-start sub-agent executed the task and wrote the verdict under the round protocol (see `skills/rsi-loop/references/round-protocol.md`).
+  - `manual` — author/operator bookkeeping: baseline construction, task authoring self-checks, or any verdict not produced by a protocol round.
+  Default `manual` keeps schema v1 backward compatible; retro statistics are grouped by origin (P5, retro-2026-08-29) so RED/pass rates of protocol rounds never mix with manual bookkeeping.
 - `scores` (map, required) — five fixed dimensions, each an integer from 1 (worst) to 5 (best), scored per the review rubric:
   - `correctness` — requirement satisfied, edge cases and failure paths handled.
   - `test_quality` — tests verify behavior, catch regressions, and include meaningful negative/edge cases.

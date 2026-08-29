@@ -1,6 +1,7 @@
 schema_version: 1
 task_id: "19-money-rounding"
 milestone: "m1"
+origin: manual
 decision: accepted
 scores:
   correctness: 5

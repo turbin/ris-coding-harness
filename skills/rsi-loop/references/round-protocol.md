@@ -55,7 +55,9 @@ The sub-agent must return (per `pm-workers-engineering`):
 
 - `MILESTONE ACCEPTED` / `MILESTONE REJECTED` decision;
 - structured verdict written to `evals/results/<task-id>-<milestone>.yaml`
-  (schema v1, see `skills/pm-workers-engineering/references/verdict-schema.md`);
+  (schema v1, see `skills/pm-workers-engineering/references/verdict-schema.md`)
+  with `origin: protocol` (P5, retro-2026-08-29) — required for every
+  sub-agent round so protocol telemetry never mixes with manual bookkeeping;
 - every problem discovered but not fixed recorded in `issues/`;
 - issue closure verified before acceptance (fixed with evidence or
   explicitly deferred).

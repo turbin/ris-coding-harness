@@ -1,6 +1,7 @@
 schema_version: 1
 task_id: "02-unbounded-cache"
 milestone: "m1"
+origin: manual
 decision: accepted
 scores:
   correctness: 5
