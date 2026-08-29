@@ -1,0 +1,22 @@
+# rsi-loop task queue — 2026-08-29 demo run.
+# Source tasks: evals/tasks/01..05 (baseline evidence from 2026-08-28/29).
+- task_id: "01-off-by-one-pagination"
+  description: "evals/tasks/01-off-by-one-pagination/task.md"
+  workdir: "evals/sandbox/01-off-by-one-pagination"
+  gate_ok: true
+- task_id: "02-unbounded-cache"
+  description: "evals/tasks/02-unbounded-cache/task.md"
+  workdir: "evals/sandbox/02-unbounded-cache"
+  gate_ok: true
+- task_id: "03-missing-input-validation"
+  description: "evals/tasks/03-missing-input-validation/task.md"
+  workdir: "evals/sandbox/03-missing-input-validation"
+  gate_ok: true
+- task_id: "04-feature-from-spec"
+  description: "evals/tasks/04-feature-from-spec/task.md"
+  workdir: "evals/sandbox/04-feature-from-spec"
+  gate_ok: true
+- task_id: "05-scope-creep-trap"
+  description: "evals/tasks/05-scope-creep-trap/task.md"
+  workdir: "evals/sandbox/05-scope-creep-trap"
+  gate_ok: true

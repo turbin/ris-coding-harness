@@ -1,24 +1,25 @@
-# rsi-loop state — observe-only demo run (2026-08-29).
-# Rounds reconstructed from the 2026-08-28/29 baseline evidence to validate
-# the state-file machinery end-to-end. No mutation occurred (observe-only).
+# rsi-loop state — real protocol round (2026-08-29, loop-real-01).
+# First loop run with real cold-start sub-agents (pi/kimi, headless print
+# mode). Gate observe-only: telemetry only, zero mutation. Preflight policy
+# fallback: no .rsi/policy.yaml in this repo (harness repo, L3 layer) — used
+# the builtin protected list from skills/rsi-loop/references/gate-policy.md.
 schema_version: 1
-loop_id: "2026-08-29-loop-demo-01"
+loop_id: "2026-08-29-loop-real-01"
 gate: observe-only
 rounds_requested: 5
-rounds_done: 5
+rounds_done: 0
 queue_file: "progress/loop/tasks.yaml"
-queue_position: 5
-started_at: "2026-08-29T07:30:00+08:00"
-last_round_at: "2026-08-29T07:35:00+08:00"
+queue_position: 0
+started_at: "2026-08-29T09:00:00+08:00"
+last_round_at: null
 pause: false
 counters:
-  accepted: 5
+  accepted: 0
   rejected: 0
-  no_red_evidence: 3
+  no_red_evidence: 0
   issues_by_category: {}
   proposals_landed: []
-  evals:
-    - "results/eval-20260829T071037.json (pass@1 1.00)"
+  evals: []
 metrics:
-  last_pass_rate: 1.0
+  last_pass_rate: null
   baseline_pass_rate: 1.0

@@ -1,22 +1,24 @@
-# rsi-loop task queue — 2026-08-29 demo run.
-# Source tasks: evals/tasks/01..05 (baseline evidence from 2026-08-28/29).
-- task_id: "01-off-by-one-pagination"
-  description: "evals/tasks/01-off-by-one-pagination/task.md"
-  workdir: "evals/sandbox/01-off-by-one-pagination"
+# rsi-loop task queue — real protocol round 2026-08-29 (loop-real-01).
+# First round with real cold-start sub-agents (pi/kimi headless), observe-only.
+# Tasks 11-15: the expansion batch whose verdicts were manual bookkeeping;
+# this round replaces them with genuine protocol-round data (origin: protocol).
+- task_id: "11-concurrency-shared-state"
+  description: "evals/tasks/11-concurrency-shared-state/task.md"
+  workdir: "evals/sandbox/11-concurrency-shared-state"
   gate_ok: true
-- task_id: "02-unbounded-cache"
-  description: "evals/tasks/02-unbounded-cache/task.md"
-  workdir: "evals/sandbox/02-unbounded-cache"
+- task_id: "12-compat-legacy-format"
+  description: "evals/tasks/12-compat-legacy-format/task.md"
+  workdir: "evals/sandbox/12-compat-legacy-format"
   gate_ok: true
-- task_id: "03-missing-input-validation"
-  description: "evals/tasks/03-missing-input-validation/task.md"
-  workdir: "evals/sandbox/03-missing-input-validation"
+- task_id: "13-simplicity-overengineering"
+  description: "evals/tasks/13-simplicity-overengineering/task.md"
+  workdir: "evals/sandbox/13-simplicity-overengineering"
   gate_ok: true
-- task_id: "04-feature-from-spec"
-  description: "evals/tasks/04-feature-from-spec/task.md"
-  workdir: "evals/sandbox/04-feature-from-spec"
+- task_id: "14-resource-handle-leak"
+  description: "evals/tasks/14-resource-handle-leak/task.md"
+  workdir: "evals/sandbox/14-resource-handle-leak"
   gate_ok: true
-- task_id: "05-scope-creep-trap"
-  description: "evals/tasks/05-scope-creep-trap/task.md"
-  workdir: "evals/sandbox/05-scope-creep-trap"
+- task_id: "15-weak-test-regression"
+  description: "evals/tasks/15-weak-test-regression/task.md"
+  workdir: "evals/sandbox/15-weak-test-regression"
   gate_ok: true
