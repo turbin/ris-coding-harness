@@ -14,7 +14,7 @@ the loop's mutations are only auditable when the starting point is known.
 | 3 | Protected-files policy present | `.rsi/policy.yaml` (or the canonical equivalent) exists with `protected_files`; when missing, fall back to the builtin list in `references/gate-policy.md` and record the fallback |
 | 4 | Eval harness runnable | `./evals/run-eval.sh list` exits 0 and lists ≥1 task |
 | 5 | Task queue present | `progress/loop/tasks.yaml` (or `--queue`) exists and is parseable; each entry has `task_id`, `description`, `gate_ok` |
-| 6 | Tools available | `bash`, `git`, `python3` (+ `yaml` module for aggregation), and an agent CLI capable of running the PM-Workers protocol |
+| 6 | Tools available | `bash`, `git`, `python3` (+ `yaml` module for aggregation), and an agent CLI capable of running the PM-Workers protocol. Candidates come from `RSI_AGENT_CANDIDATES` env var or `progress/loop/agent.env` (default builtin list: pi, opencode, claude, codex, kimi); at least one candidate must be installed **and usable** (verify with a one-shot invocation, e.g. `pi -p 'reply ok'`) |
 | 7 | Loop directory writable | `progress/loop/` exists (or can be created) and `state.yaml` is readable/writable |
 | 8 | Gate level valid | gate is one of `observe-only` / `l1-auto` / `all-manual` (see `gate-policy.md`) |
 | 9 | Results dir present | `evals/results/` exists and is writable |

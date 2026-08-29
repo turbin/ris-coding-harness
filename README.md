@@ -227,6 +227,8 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 
 核心原则：任何自改进变更必须经 eval 验证不退化才可合并；eval 任务集与评分脚本列入 protected files，永不自动变异；一切变异走 git 提交，可逐轮回滚。
 
+运行环境配置：`run-loop.sh` 按 `--agent-cmd` → `RSI_AGENT_CMD` → `RSI_AGENT_CANDIDATES`（环境变量或 `progress/loop/agent.env`）→ 内置默认列表 的顺序选择 agent CLI；只把本机实际可用的 agent 列入候选（本仓库即 `progress/loop/agent.env` 的 `RSI_AGENT_CANDIDATES="pi kimi"`）。无人值守场景用 `--headless`（pi 走 `-p`，kimi 走 `-p --print`）。
+
 ## 设计原则
 
 ### 1. Skill 与工程规则分离
