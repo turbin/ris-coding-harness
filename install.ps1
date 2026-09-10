@@ -25,7 +25,8 @@
 .PARAMETER Agent
   Additionally install the skill to agent-specific directories.
   Values: claude, pi, kimi, kimi-code, opencode, codex, agents, all.
-  Accepts comma-separated names and/or repeated parameters.
+  Accepts comma-separated names or an array of names; repeated -Agent
+  parameters are not supported by PowerShell parameter binding.
 
 .PARAMETER Scope
   project | user (default: project) — resolve agent skill directories
@@ -76,7 +77,8 @@ Options:
   -NoSkill               Do not install the PM-Workers skill
   -Agent NAMES           Also install the skill to agent-specific directories.
                          Values: claude, pi, kimi, kimi-code, opencode, codex,
-                         agents, all. Comma-separated and/or repeated.
+                         agents, all. Comma-separated or an array; repeated
+                         -Agent parameters cannot bind in PowerShell.
   -Scope project|user    Resolve agent directories under the target project
                          or the user home (default: project)
   -Help                  Show this help

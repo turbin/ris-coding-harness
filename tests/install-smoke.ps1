@@ -52,10 +52,10 @@ try {
   Assert-True (Test-Path (Join-Path $Multi ".opencode/skills/pm-workers-engineering/SKILL.md")) "multi .opencode skill"
   Assert-True (Test-Path (Join-Path $Multi ".codex/skills/pm-workers-engineering/SKILL.md")) "multi .codex skill"
 
-  # -Agent may be passed repeatedly.
+  # -Agent accepts multiple names as an array (repeated parameters cannot bind).
   $Repeat = Join-Path $Tmp "repeat"
   New-Item -ItemType Directory -Force -Path $Repeat | Out-Null
-  & (Join-Path $Root "install.ps1") -Target $Repeat -Mode adopt -NoGit -Agent claude -Agent pi | Out-Null
+  & (Join-Path $Root "install.ps1") -Target $Repeat -Mode adopt -NoGit -Agent claude,pi | Out-Null
   Assert-True (Test-Path (Join-Path $Repeat ".agents/skills/pm-workers-engineering/SKILL.md")) "repeat .agents skill"
   Assert-True (Test-Path (Join-Path $Repeat ".claude/skills/pm-workers-engineering/SKILL.md")) "repeat .claude skill"
   Assert-True (Test-Path (Join-Path $Repeat ".pi/skills/pm-workers-engineering/SKILL.md")) "repeat .pi skill"
