@@ -1,6 +1,6 @@
 # RIS Coding Harness — 递归自我改进（RSI）设计
 
-版本：v0.3（Phase 0-2 已实施，Phase 3-5 已实施）
+版本：v0.4（Phase 0-5 已实施；L1P 平台层 / 约束冲突门 / 事件触发已实施）
 日期：2026-08-27
 
 ## 1. 背景与目标
@@ -242,6 +242,22 @@ skill 结构：
 - **加载纪律**：只加载与当前运行时匹配 `platform` 且任务涉及 `scope` 的卡片（渐进式披露）。
 - **导出（预留，未排期）**：`.rsi/policy.yaml` 的 `platform_knowledge.export.targets` 预留知识库目标（如 Open Viking）；同步步骤读取 `export_ready: true` 的卡片推送，目标未配置时导出为 no-op。
 - L1P 内部冲突同样走 §4.4 的提案审阅与防振荡条款，但即使合并结论已达成，卡片也保持未提交，等人工确认。
+
+### 4.7 事件触发源（休眠期自动评估）
+
+评估②（eval 集）的施工段需要 agent，不能指望「空闲的 agent 自触发」——会话闲置时不执行任何代码。触发模型反转：**由事件源在合适时机拉起评估，而不是 agent 监视自身状态**。因此也无需为不同 agent 适配状态监视机制：核心两层 agent 无关，第三层可缺省。
+
+三层触发源：
+
+| 层 | 触发源 | 说明 |
+|---|---|---|
+| 核心 | git hooks：`post-merge` 立即置标记；`post-commit` 防抖——触及 `docs/engineering/**`（L1P `platform/` 除外）或 `.agents/skills/**` 的提交立即置标记，其余提交每累计 N 次（默认 5）置标记 | 所有 agent 最终都走 git 提交，天然的事件总线；已实现：`evals/install-hooks.sh` + `evals/trigger.sh` |
+| 核心 | OS 调度器：cron / 任务计划在夜间或机器空闲时消费标记跑评估 | 机器空闲 ≠ agent 空闲；「工程休眠阶段自动评估」由这层承担，与 rsi-loop 薄壳共用入口 |
+| 可选 | agent 内事件（Kimi 会话 cron、Claude hooks 等） | 薄适配器，允许缺失，缺省回退到前两层 |
+
+标记语义（`evals/.eval-pending`，gitignored）：hook 只置标记、不跑评估（hook 内同步拉起 agent 会阻塞用户 git 操作）。消费方 = OS 调度薄壳或下一个 agent 会话：`trigger.sh status` 检查 → 跑完整战役（`setup → 施工 → verify → check`）→ `trigger.sh consume` 清除。`check` 低于基线即停机报告（停机条件不变）。
+
+门禁不变：无人值守触发的评估结果在人工终验前属「试运行」；检测到退步时的动作是停下产报告，不是自动回滚或自动改规则。
 
 ## 5. 安全与门禁（横切设计）
 

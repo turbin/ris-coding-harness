@@ -228,6 +228,7 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 | 5 | `rsi-loop` skill 无人值守循环（agent 内调用，shell 仅作可选调度薄壳） | ✅ 已实施（`skills/rsi-loop/`、`run-loop.sh`、`scripts/rsi-protect.sh`，observe-only 5 轮试跑） |
 | — | L1P 平台知识层（永不自动 commit，预留 Open Viking 等知识库导出） | ✅ 已实施（2026-09-10） |
 | — | 约束冲突同步检查（`references/rule-conflict-check.md`；可解自动优化 / 不可解提交用户裁决） | ✅ 已实施（2026-09-10） |
+| — | 事件触发评估（git hook 防抖置标 + `trigger.sh` 消费；休眠期由 OS 调度器拉起，见设计 §4.7） | ✅ 已实施（2026-09-10） |
 
 核心原则：任何自改进变更必须经 eval 验证不退化才可合并；eval 任务集与评分脚本列入 protected files，永不自动变异；一切变异走 git 提交，可逐轮回滚。
 
@@ -273,6 +274,7 @@ Agent 首先读取 `AGENTS.md`，再读取 `docs/engineering/index.md`，只加�
 ```bash
 ./tests/install-smoke.sh        # macOS / Linux
 pwsh ./tests/install-smoke.ps1  # Windows（PowerShell 5.1+ / pwsh 7+）
+./tests/trigger-smoke.sh        # 事件触发 hook 的置标/防抖/消费生命周期
 ```
 
 覆盖：`init`/`adopt` 自动模式判断、核心文件落位（含 `.rsi/` 策略与 `evals/results/`）、已有工程不被重排、重复执行的非破坏性、`--agent` 多目标分发与重复传参、未知 agent 的 fail-fast。

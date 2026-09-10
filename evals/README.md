@@ -60,3 +60,19 @@ evals/
    - `run-eval.sh setup <slug> && run-eval.sh verify <slug>` → 未改动的沙盒必须 **FAIL**；
    - 临时放入一个参考解 → 必须 **PASS**；然后删掉参考解重置沙盒。
 6. 可选 `rubric.md` 给人看。
+
+## 事件触发（休眠期自动评估）
+
+评估战役的施工段需要 agent，git hook 内不执行评估——hook 只维护「待评估」标记（`evals/.eval-pending`，gitignored）：
+
+- `post-merge` → 立即置标记（理由 merge）
+- `post-commit` → 防抖：触及 `docs/engineering/**`（L1P `platform/` 除外）或 `.agents/skills/**` 的提交立即置标记；其余提交每累计 5 次置标记
+
+安装（每个目标工程手动执行一次，幂等，不覆盖非受管 hook）：
+
+```bash
+evals/install-hooks.sh            # 当前仓库
+evals/install-hooks.sh --target PATH
+```
+
+标记生命周期：`evals/trigger.sh status`（有标记退出 0 并打印理由）→ 消费方跑完整战役（`setup → agent 施工 → verify → check`）→ `evals/trigger.sh consume`（打印理由并清除）。消费方通常是夜间 cron 薄壳或下一个 agent 会话；`check` 低于基线时按设计停机报告，不自动回滚。设计依据见 `docs/rsi-design.md` §4.7。
