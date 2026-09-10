@@ -545,4 +545,9 @@ skill's obligations toward that loop:
   captured as a platform knowledge card per `references/platform-knowledge.md`
   instead of a generic coding rule — cards live in
   `docs/engineering/platform/<platform>/`, are **never auto-committed**, and
-  are listed in the PM report as awaiting human commit.
+  are listed in the PM report as awaiting human commit;
+- every mutation proposal passes the rule conflict check per
+  `references/rule-conflict-check.md` before it is applied — duplicate /
+  wording conflicts may be auto-merged; directional, cross-layer, or
+  oscillation conflicts pause the proposal for user arbitration, and the
+  ruling is recorded in `decisions/`.

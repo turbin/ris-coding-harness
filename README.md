@@ -227,6 +227,7 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 | 4 | L2 Skill 自改进（eval 驱动） | ✅ 已实施（SKILL.md v1.1.0，RED 证据最小形式，eval 验证） |
 | 5 | `rsi-loop` skill 无人值守循环（agent 内调用，shell 仅作可选调度薄壳） | ✅ 已实施（`skills/rsi-loop/`、`run-loop.sh`、`scripts/rsi-protect.sh`，observe-only 5 轮试跑） |
 | — | L1P 平台知识层（永不自动 commit，预留 Open Viking 等知识库导出） | ✅ 已实施（2026-09-10） |
+| — | 约束冲突同步检查（`references/rule-conflict-check.md`；可解自动优化 / 不可解提交用户裁决） | ✅ 已实施（2026-09-10） |
 
 核心原则：任何自改进变更必须经 eval 验证不退化才可合并；eval 任务集与评分脚本列入 protected files，永不自动变异；一切变异走 git 提交，可逐轮回滚。
 

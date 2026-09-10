@@ -44,6 +44,13 @@ itself (context isolation; identical guarantees to a shell-per-round model).
              Every mutation = one git commit, message references proposal ID
              (e.g. "feat: apply P12 (retro-2026-08-29)"). Update
              evals/baseline.json only when eval shows no regression.
+             Conflict check (rule-conflict-check.md) runs BEFORE any apply:
+             every proposal carries a conflict_check section; duplicate /
+             wording conflicts may be auto-merged but still pass the gates
+             above; directional / cross-layer / oscillation conflicts pause
+             the proposal for user arbitration, ruling recorded in
+             decisions/. L1P platform cards are drafted only — never
+             committed.
 8. STOP?     check stop conditions (stop-conditions.md); if tripped, write
              incident report and end the loop immediately.
 ```
