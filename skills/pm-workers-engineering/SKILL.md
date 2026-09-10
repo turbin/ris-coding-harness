@@ -1,7 +1,7 @@
 ---
 name: pm-workers-engineering
 description: A project-agnostic PM-Workers software-engineering skill that coordinates PM, Coder, and Reviewer roles, uses TDD and adversarial review, and progressively loads project-specific engineering rules from the repository. Use whenever the user asks to develop in PM-Workers mode — e.g. mentions "pm-workers", "PM-Workers 模式", "pm-workers 开发模式", "PM 模式开发", or requests PM/Coder/Reviewer multi-role development, milestone-gated TDD, or adversarial review workflows.
-version: 1.2.0
+version: 1.3.0
 ---
 
 # PM-Workers Engineering Skill
@@ -68,6 +68,7 @@ Recommended contents:
 - `docs/engineering/performance.md` — runtime, memory, concurrency, latency constraints
 - `docs/engineering/git.md` — branch/commit/review conventions
 - `docs/engineering/tooling.md` — build/lint/test/dev commands
+- `docs/engineering/platform/<platform>/*.md` — platform-specific knowledge cards; load only cards matching the current runtime (see `references/platform-knowledge.md`)
 
 These names are defaults, not hard requirements. If the project points elsewhere, follow the project.
 
@@ -447,6 +448,7 @@ When the canonical initialized layout exists:
 - user-requested conversation archival → `conversations/`
 - delivery/build/release descriptions → `output/`
 - structured review verdicts → `evals/results/`
+- platform-specific fix knowledge → `docs/engineering/platform/<platform>/` knowledge cards
 - disposable working artifacts → `tmp/`
 
 ## Issue recording duty
@@ -461,6 +463,8 @@ Every problem discovered during a task that is **not fixed within that task** mu
 Issues found and fixed inside the same task need no `issues/` record — the verdict and regression tests already capture them. Every fixed defect must have a regression test that fails without the fix; when a recorded issue is later fixed, update its record to reference the guarding regression test, so future reflection can trace failure mode → fix → guarding test.
 
 A record is minimal: what the problem is, reproduction or evidence, severity, the task/milestone that surfaced it, and status. Do not expand scope to fix a discovered issue; record it and let the PM triage.
+
+Generalizable platform-specific fix knowledge (for example, a Windows-only workaround) is captured as a platform knowledge card instead of a generic coding rule — see §16 and `references/platform-knowledge.md`.
 
 Use each directory's `index.md` and local formatting rules before creating records.
 
@@ -526,3 +530,19 @@ PM summarizes:
 - Final status: `DONE`, `PARTIAL`, or `BLOCKED`
 
 Only report facts supported by repository state, test output, or reviewer evidence.
+
+---
+
+# 16. RSI loop integration
+
+Cross-task reflection, retro, and rule writeback are orchestrated by the
+`rsi-loop` skill (`skills/rsi-loop/`), not by this per-task protocol. This
+skill's obligations toward that loop:
+
+- structured verdicts land in `evals/results/` (§8, §12);
+- problems discovered but not fixed are recorded in `issues/` (§12);
+- **platform-specific fix knowledge** (e.g. a Windows-only workaround) is
+  captured as a platform knowledge card per `references/platform-knowledge.md`
+  instead of a generic coding rule — cards live in
+  `docs/engineering/platform/<platform>/`, are **never auto-committed**, and
+  are listed in the PM report as awaiting human commit.

@@ -9,7 +9,7 @@ the loop's mutations are only auditable when the starting point is known.
 
 | # | Check | Pass condition |
 |---|---|---|
-| 1 | Git working tree clean | `git status --porcelain` empty (or every entry is a known, recorded artifact and the human approved starting anyway) |
+| 1 | Git working tree clean | `git status --porcelain` empty (or every entry is a known, recorded artifact and the human approved starting anyway); uncommitted L1P platform cards under `docs/engineering/platform/` are expected state, not pollution (design §4.6) |
 | 2 | Baseline exists | `evals/baseline.json` present with a non-null `pass_rate` (`run-eval.sh check` can compare) |
 | 3 | Protected-files policy present | `.rsi/policy.yaml` (or the canonical equivalent) exists with `protected_files`; when missing, fall back to the builtin list in `references/gate-policy.md` and record the fallback |
 | 4 | Eval harness runnable | `./evals/run-eval.sh list` exits 0 and lists ≥1 task |

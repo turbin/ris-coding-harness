@@ -11,8 +11,11 @@ anything under this directory.
   mutation may change; larger proposals must be split into multiple rounds.
 - `gate` — the gate level (`observe-only | l1-auto | all-manual`) controlling
   which self-modification layers may auto-apply.
-- `layers` — the L1 (project rules) / L2 (collaboration protocol) / L3
-  (harness mechanism) risk tiers.
+- `layers` — the L1 (project rules) / L1P (platform knowledge cards) /
+  L2 (collaboration protocol) / L3 (harness mechanism) risk tiers.
+- `platform_knowledge` — L1P commit discipline: cards under
+  `docs/engineering/platform/` are drafted but never auto-committed; a human
+  commits them and may later export them to an external knowledge base.
 
 Every self-improvement change must land as its own git commit whose message
 carries the proposal ID, so each round can be rolled back individually.

@@ -71,6 +71,7 @@ RSI 的首要设计问题是：agent 允许修改自己的哪一部分？分三�
 | 层 | 对象 | 变更内容 | 风险 | 默认门禁 |
 |---|---|---|---|---|
 | L1 规则层 | `docs/engineering/*.md`（目标工程内） | 编码规范、测试约定、架构约束 | 低：只影响行为提示，且是目标工程的产物 | Reviewer 审阅 + git 提交 |
+| L1P 平台知识层 | `docs/engineering/platform/**`（目标工程内；路径匹配上优先于 L1） | 平台相关经验知识卡（如 Windows 专项修复经验、平台相关依赖约束） | 低-中：不进通用规则上下文，但含环境特定性 | Reviewer 审阅 + **人工提交（永不自动 commit）**；预留外部知识库导出（§4.6） |
 | L2 Skill 层 | `.agents/skills/pm-workers-engineering/SKILL.md` + `references/` | 协作协议、角色指令 | 中：影响所有任务的行为 | Reviewer diff 审阅 + eval 不回归 + 版本号递增 |
 | L3 Harness 层 | `install.sh` / `install.ps1`、`rsi-loop` skill、评分脚本 | 回路机制本身 | 高：改错了整个回路失真 | 人类批准，永不自动改 |
 
@@ -221,12 +222,25 @@ skill 结构：
 
 1. **编排者极薄，每轮派生子代理**：宿主 agent 只做预检、取任务、派单、收 verdict、判断 retro 触发、写状态；绝不在自己上下文中执行任务细节（否则多轮后循环状态本身耗尽上下文预算）。每轮子代理冷启动，上下文隔离与 shell 方案等价。
 2. **skill 无状态，状态全在文件**：`progress/loop/state.yaml`（轮次、任务队列、门禁级别、累计指标）+ 每轮报告 `progress/loop/<round>.yaml`。
-3. **预检清单**：git 工作区干净、eval 基线存在、protected files 清单存在、所需工具可用；预检不过不进循环。
+3. **预检清单**：git 工作区干净（`docs/engineering/platform/` 下待人工提交的知识卡除外，属预期状态，见 §4.6）、eval 基线存在、protected files 清单存在、所需工具可用；预检不过不进循环。
 4. **停机条件硬编码**：eval 降幅超阈值、连续 N 任务失败、git 状态污染 → 立即停止并产出事故报告，等待人工。
 5. **人工终验（不可省略）**：循环跑完指定轮数（或异常停止）后，产出整批总结报告——任务结果、eval 分数变化、本批全部变异清单及 diff 摘要——并停下等待人工最终验收。无人值守不等于无人审阅：循环期间自动合并的变更在人工终验通过前处于「试运行」状态；终验拒绝时按提案 ID 整批 `git revert` 回滚。
 6. **门禁级别作为调用参数写入 state**：`observe-only`（只记录不变异，调试回路用）/ `l1-auto`（L1 自动、L2 需批准）/ `all-manual`（所有变异前暂停询问用户）。门禁级别只控制**过程中**的自动化程度，不影响第 5 条的人工终验。
 7. **shell 只保留可选薄壳**：`run-loop.sh` 仅做「调起 agent 并 invoke rsi-loop」这一件事，供 cron/CI 等真正无人值守场景使用；交互场景下用户直接要求 agent 跑 N 轮即可。
 8. **门禁强制力补强**：skill 自我约束弱于外部脚本，配可选 git pre-commit 钩子对 protected files 做硬校验——即使 agent 违规，提交也会被拒。
+
+### 4.6 平台知识层（L1P）与外部知识库导出
+
+反思回写的经验并非全部平台无关。Windows 特有的修复经验（路径/换行/编码怪癖、PowerShell 与 bash 差异、驱动/工具链版本陷阱、平台相关的依赖约束）若写进通用规则，会污染其他平台的规则上下文。
+
+设计：
+
+- **位置与格式**：`docs/engineering/platform/<platform>/<slug>.md`，一卡一文件；YAML frontmatter 携带 `platform` / `scope` / `source` / `date` / `export_ready` 元数据；`platform/index.md` 负责路由。
+- **提交纪律**：L1P 永不自动 commit。循环只在工作区起草卡片，并在轮次报告中列「待人工提交」；未提交的 platform/ 变更是预期状态，不计入 rsi-loop 预检的工作区污染（§4.5 第 3 条）。
+- **门禁**：卡片不做 eval 门禁；质量门禁 = Reviewer 审阅 + 人工提交。
+- **加载纪律**：只加载与当前运行时匹配 `platform` 且任务涉及 `scope` 的卡片（渐进式披露）。
+- **导出（预留，未排期）**：`.rsi/policy.yaml` 的 `platform_knowledge.export.targets` 预留知识库目标（如 Open Viking）；同步步骤读取 `export_ready: true` 的卡片推送，目标未配置时导出为 no-op。
+- L1P 内部冲突同样走 §4.4 的提案审阅与防振荡条款，但即使合并结论已达成，卡片也保持未提交，等人工确认。
 
 ## 5. 安全与门禁（横切设计）
 
@@ -239,6 +253,7 @@ skill 结构：
    - Reviewer 审提案时专门检查「这条规则是否在教 agent 钻评分的空子」。
 5. **防振荡**：同一文件的规则，连续两次 retro 不得做方向相反的修改；出现即升级人类仲裁。
 6. **人类最终权威**：任何层级的人都可以随时把门禁调回 `all-manual`；L3 永远人类批准。
+7. **平台知识提交纪律**：L1P（`docs/engineering/platform/**`）永不自动 commit——循环只起草，人工提交后再由知识库导出流程消费（§4.6）。
 
 ## 6. 度量指标
 
@@ -262,6 +277,7 @@ skill 结构：
 | 3 | retro 机制 + L1 规则回写（人工批准） | 完成一次「失败→归因→规则变更→eval 验证」全闭环 | ✅ 已实施（2026-08-28/29，提案 P1-P3 落地） |
 | 4 | L2 Skill 自改进（eval 驱动 + 版本号） | 一次 SKILL.md 变更有 eval 证据支撑 | ✅ 已实施（v1.1.0，RED 证据最小形式） |
 | 5 | `rsi-loop` skill 无人值守循环（可选 shell 薄壳供 cron/CI） | `--gate observe-only` 连跑 5 轮产出完整报告 | ✅ 已实施（`skills/rsi-loop/` + `run-loop.sh`，5 轮试跑，2026-08-29 人工终验通过） |
+| — | L1P 平台知识层（§4.6，永不自动 commit，预留 Open Viking 等知识库导出） | 协议已实施（2026-09-10）；首次人工提交与知识库导出待启用 | ✅ 已实施 |
 
 每个 Phase 独立可交付、可暂停。Phase 0-2 是纯增量（只加不改），风险接近零；Phase 3 是第一个真正意义上的「自我改进」。
 

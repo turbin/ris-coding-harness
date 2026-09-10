@@ -222,6 +222,13 @@ try {
   Get-ChildItem (Join-Path $SourceRoot "templates/project/docs/engineering") -Filter *.md | ForEach-Object {
     Managed-Copy $_.FullName (Join-Path $TargetRoot ("docs/engineering/" + $_.Name))
   }
+  $PlatformSrc = Join-Path $SourceRoot "templates/project/docs/engineering/platform"
+  if (Test-Path $PlatformSrc) {
+    Get-ChildItem $PlatformSrc -Recurse -File | ForEach-Object {
+      $rel = $_.FullName.Substring($PlatformSrc.Length).TrimStart('\', '/')
+      Managed-Copy $_.FullName (Join-Path $TargetRoot ("docs/engineering/platform/" + $rel))
+    }
+  }
 
   if (-not $NoSkill) {
     $SkillsRoot = Join-Path $SourceRoot "skills"

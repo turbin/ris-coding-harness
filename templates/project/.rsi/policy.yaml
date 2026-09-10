@@ -1,6 +1,6 @@
 # RSI policy — safety boundary for recursive self-improvement.
 # This file is an L3 (harness-layer) asset: agent self-modification must never touch it.
-schema_version: 1
+schema_version: 2
 
 # Files/globs that autonomous mutation must never modify.
 protected_files:
@@ -17,7 +17,17 @@ change_budget:
 gate: l1-auto
 
 # Self-modification layers (risk ascending). L3 never auto-mutates.
+# L1P overrides L1 for matching paths.
 layers:
-  L1: "docs/engineering/**"      # project rules; default mutation target
-  L2: ".agents/skills/**"        # collaboration protocol; needs eval non-regression
-  L3: ".rsi/**"                  # harness mechanism; human approval only
+  L1: "docs/engineering/**"            # project rules; default mutation target
+  L1P: "docs/engineering/platform/**"  # platform knowledge cards; never auto-committed
+  L2: ".agents/skills/**"              # collaboration protocol; needs eval non-regression
+  L3: ".rsi/**"                        # harness mechanism; human approval only
+
+# Platform knowledge (L1P) is drafted by the reflection loop but never
+# auto-committed: a human reviews and commits it, and may later export
+# export_ready cards to an external knowledge base.
+platform_knowledge:
+  auto_commit: false
+  export:
+    targets: []                        # reserved; e.g. open-viking

@@ -13,6 +13,7 @@ Load only the files needed for the current task.
 | Memory / performance / concurrency / lifecycle | `performance.md` |
 | Branch / commit / review rules | `git.md` |
 | Build / lint / dev / release commands | `tooling.md` |
+| Platform-specific quirks / dependency constraints | `platform/index.md` (load only cards matching the current runtime) |
 
 ## Rule precedence
 

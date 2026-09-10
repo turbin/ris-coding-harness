@@ -120,6 +120,7 @@ docs/engineering/                # 当前工程自己的特殊规则
   performance.md
   git.md
   tooling.md
+  platform/                      # 平台知识卡（L1P，永不自动 commit，预留知识库导出）
 .rsi/                            # RSI 安全策略（protected files / 变更预算 / 门禁）
   policy.yaml
   README.md
@@ -131,6 +132,7 @@ docs/engineering/                # 当前工程自己的特殊规则
       layout-adapter.md
       project-onboarding.md         # 基础设施发现程序（扫描/询问 → tooling/testing 规则）
       verdict-schema.md             # Reviewer 结构化 verdict 规范
+      platform-knowledge.md         # L1P 平台知识卡（永不自动 commit）
       agents/
         pm.md
         coder.md
@@ -145,7 +147,7 @@ docs/engineering/                # 当前工程自己的特殊规则
 
 ### 1. 安装后补齐工程规则
 
-安装完成后，填写目标工程中的 `docs/engineering/index.md`，以及只与本工程相关的规则文件（架构、编码、测试、性能、Git、工具链）。这些规则是 L1 层资产，也是 RSI 闭环默认允许自动改进的对象。
+安装完成后，填写目标工程中的 `docs/engineering/index.md`，以及只与本工程相关的规则文件（架构、编码、测试、性能、Git、工具链）。这些规则是 L1 层资产，也是 RSI 闭环默认允许自动改进的对象（`docs/engineering/platform/` 下的平台知识卡除外——它们属 L1P 层，永不自动 commit）。
 
 也可以不手填：Skill 内置基础设施 onboarding 程序（`project-onboarding.md`）——首个涉及构建/测试的任务触发时，agent 会自动处理：
 
@@ -224,6 +226,7 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 | 3 | retro 归因 + L1 规则回写（第一次完整闭环） | ✅ 已实施（`progress/retro/`、`scripts/retro-aggregate.py`、提案 P1-P3 已落地） |
 | 4 | L2 Skill 自改进（eval 驱动） | ✅ 已实施（SKILL.md v1.1.0，RED 证据最小形式，eval 验证） |
 | 5 | `rsi-loop` skill 无人值守循环（agent 内调用，shell 仅作可选调度薄壳） | ✅ 已实施（`skills/rsi-loop/`、`run-loop.sh`、`scripts/rsi-protect.sh`，observe-only 5 轮试跑） |
+| — | L1P 平台知识层（永不自动 commit，预留 Open Viking 等知识库导出） | ✅ 已实施（2026-09-10） |
 
 核心原则：任何自改进变更必须经 eval 验证不退化才可合并；eval 任务集与评分脚本列入 protected files，永不自动变异；一切变异走 git 提交，可逐轮回滚。
 

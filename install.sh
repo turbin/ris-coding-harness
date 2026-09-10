@@ -172,6 +172,13 @@ managed_copy "$SOURCE_ROOT/templates/project/AGENTS.md" "$TARGET/AGENTS.md"
 for f in "$SOURCE_ROOT"/templates/project/docs/engineering/*.md; do
   managed_copy "$f" "$TARGET/docs/engineering/$(basename "$f")"
 done
+PLATFORM_SRC="$SOURCE_ROOT/templates/project/docs/engineering/platform"
+if [ -d "$PLATFORM_SRC" ]; then
+  while IFS= read -r -d '' f; do
+    rel="${f#$PLATFORM_SRC/}"
+    managed_copy "$f" "$TARGET/docs/engineering/platform/$rel"
+  done < <(find "$PLATFORM_SRC" -type f -print0)
+fi
 
 install_skill_to() {
   dest="$1"
