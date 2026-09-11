@@ -22,12 +22,12 @@ takes effect next round.
 | Layer | Object | Default gate |
 |---|---|---|
 | L1 | `docs/engineering/*.md` in the target project | Reviewer review + git commit (auto at `l1-auto`) |
-| L2 | `.agents/skills/pm-workers-engineering/**` (SKILL.md + references) | Reviewer diff review + full eval no-regression + version bump (human approval at all levels) |
+| L2 | `.harness/skills/pm-workers-engineering/**` (SKILL.md + references) | Reviewer diff review + full eval no-regression + version bump (human approval at all levels) |
 | L3 | `install.sh` / `install.ps1`, `rsi-loop` skill, eval scoring scripts, `docs/rsi-design.md`, `.rsi/**` | Human approval only. Never auto-mutated. |
 
 ## Protected files (hard rule, every level)
 
-From `.rsi/policy.yaml` when present (fallback builtin list):
+From `.harness/.rsi/policy.yaml` when present (fallback builtin list):
 
 ```yaml
 protected_files:

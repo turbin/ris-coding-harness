@@ -58,7 +58,7 @@ invoke rsi-loop --gate <observe-only|l1-auto|all-manual> --rounds <N>
 3. **Round loop** (repeat up to `--rounds`):
    a. Take the next task from the queue (or stop when the queue is empty).
    b. Spawn a cold-start sub-agent for the task: hand it the PM-Workers
-      protocol (`.agents/skills/pm-workers-engineering/SKILL.md`), the task
+      protocol (`.harness/skills/pm-workers-engineering/SKILL.md`), the task
       description, and the gate level. The orchestrator does not work the
       task itself. Capture the sub-agent's execution trace into
       `progress/loop/traces/round-<n>-<task-id>.<agent>` (P6; see

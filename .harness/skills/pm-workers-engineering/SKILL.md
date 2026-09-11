@@ -1,7 +1,7 @@
 ---
 name: pm-workers-engineering
 description: A project-agnostic PM-Workers software-engineering skill that coordinates PM, Coder, and Reviewer roles, uses TDD and adversarial review, and progressively loads project-specific engineering rules from the repository. Use whenever the user asks to develop in PM-Workers mode — e.g. mentions "pm-workers", "PM-Workers 模式", "pm-workers 开发模式", "PM 模式开发", or requests PM/Coder/Reviewer multi-role development, milestone-gated TDD, or adversarial review workflows.
-version: 1.3.0
+version: 1.4.0
 ---
 
 # PM-Workers Engineering Skill
@@ -295,6 +295,35 @@ Only after correctness is demonstrated:
 
 Re-run the relevant verification after refactoring.
 
+## Verify — build, test, and the bounded repair loop
+
+Verification runs as two distinct stages with separate evidence:
+
+1. **BUILD** — build/compile the affected artifacts with the exact command
+   from `docs/engineering/tooling.md` (or equivalent repository evidence).
+   Record command, exit code, and output location.
+2. **TEST** — run the relevant tests with the exact command from
+   `docs/engineering/testing.md` (or equivalent). Record command, exit
+   code, pass/fail counts, and log location.
+
+Build failures and test failures are different problems — always record
+which stage failed. Commands come from project rules or repository evidence
+only; never invent them (§13).
+
+**Bounded repair loop** (self-healing, hard limit 3): when BUILD or TEST
+fails —
+
+1. attribute the failure (root cause from the failure output);
+2. apply the minimal fix;
+3. re-run BUILD → TEST.
+
+Attempts count against the budget while the failure signature (root cause /
+failing output) is unchanged; a genuinely new failure resets attribution,
+and the cumulative count is still recorded. After the 3rd failed attempt on
+the same failure, stop and escalate per §13 with the full evidence chain;
+record the attempts in `issues/` and in the verdict (`fix_attempts`).
+Unattended operation must never loop past this bound.
+
 ## Change explanation
 
 For every material change, Coder provides:
@@ -484,6 +513,7 @@ Stop expanding implementation and return control to PM when any of the following
 - required project rules are contradictory;
 - tests cannot meaningfully verify the requested behavior;
 - a needed build/test/lint command is defined neither in project rules nor discoverable from repository evidence — ask the user instead of guessing (see `references/project-onboarding.md`);
+- the build/test repair budget is exhausted — three failed repair attempts on the same failure; hand the full evidence chain (failure outputs, fixes, attempt count) to PM/operator and record it in `issues/`;
 - the task scope has materially changed.
 
 PM must then re-scope, split the task, or record a decision before continuing.
@@ -498,6 +528,8 @@ A task can be marked Done only when all applicable conditions are satisfied:
 - required project rules were discovered and followed;
 - failing test/evidence existed before implementation when TDD applies;
 - relevant tests/checks pass;
+- BUILD and TEST evidence (command, exit code, pass/fail counts) is recorded for this task;
+- build/test repair attempts, if any, stayed within the 3-attempt bound and are recorded (`fix_attempts` in the verdict);
 - regression coverage exists for every defect fixed in this task (a test that fails without the fix);
 - Coder self-review completed;
 - Coder change rationale supplied;
@@ -515,6 +547,28 @@ PM cannot override the Reviewer gate silently.
 
 ---
 
+## 14.1 Task commit (gate-controlled)
+
+After `MILESTONE ACCEPTED` and a verdict with build/test evidence, PM
+performs the task commit **only when the task-level commit gate allows it**
+(the `task_commit` section of `.harness/.rsi/policy.yaml`, or the project equivalent):
+
+- `observe-only` — do not commit; leave the work in the working tree, verdict recorded, and state the pending state in the PM report.
+- `auto` — commit automatically: stage only files this task touched plus protocol artifacts (`evals/results/`, `issues/`, `progress/`); never `git add -A`; never push.
+- `manual` — stage and prepare the commit message, then ask the user before committing.
+
+Commit message format: `task <task-id> <milestone>: <summary>` — task-level
+namespace, distinct from rsi-loop mutation commits (proposal IDs).
+
+Files under `docs/engineering/platform/` (L1P platform knowledge cards) are
+**never** included in an automatic commit; they stay listed in the PM report
+as awaiting human commit. If a pre-commit protection hook is installed
+(e.g. `scripts/rsi-protect.sh`), a commit touching protected files or L1P
+paths is rejected regardless of this protocol — fix the staging set, never
+use `--no-verify` to bypass protection.
+
+---
+
 # 15. Completion report
 
 PM summarizes:
@@ -526,6 +580,7 @@ PM summarizes:
 - Tests/checks and results
 - Memory/resource impact
 - Reviewer result
+- Commit state: auto-committed / manual-commit-prepared / awaiting-commit (observe-only)
 - Remaining risks / limitations
 - Final status: `DONE`, `PARTIAL`, or `BLOCKED`
 

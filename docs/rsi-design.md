@@ -7,7 +7,7 @@
 
 本仓库当前是一套「安装器 + PM-Workers 静态协作 Skill」：
 
-- `install.sh`：幂等工程引导器（`init`/`adopt` 双模式），安装 `AGENTS.md` 路由、`docs/engineering/` 规则目录和 `.agents/skills/pm-workers-engineering/`。
+- `install.sh`：幂等工程引导器（`init`/`adopt` 双模式），安装 `AGENTS.md` 路由、`docs/engineering/` 规则目录和 `.harness/skills/pm-workers-engineering/`。
 - `SKILL.md`：PM / Coder / Reviewer 三角色协议，TDD + 对抗式审阅 + 渐进式披露。
 
 它解决了「agent 如何规范地做一次工程任务」，但没有解决「agent 如何从做任务的历史中变得更好」。
@@ -72,7 +72,7 @@ RSI 的首要设计问题是：agent 允许修改自己的哪一部分？分三�
 |---|---|---|---|---|
 | L1 规则层 | `docs/engineering/*.md`（目标工程内） | 编码规范、测试约定、架构约束 | 低：只影响行为提示，且是目标工程的产物 | Reviewer 审阅 + git 提交 |
 | L1P 平台知识层 | `docs/engineering/platform/**`（目标工程内；路径匹配上优先于 L1） | 平台相关经验知识卡（如 Windows 专项修复经验、平台相关依赖约束） | 低-中：不进通用规则上下文，但含环境特定性 | Reviewer 审阅 + **人工提交（永不自动 commit）**；预留外部知识库导出（§4.6） |
-| L2 Skill 层 | `.agents/skills/pm-workers-engineering/SKILL.md` + `references/` | 协作协议、角色指令 | 中：影响所有任务的行为 | Reviewer diff 审阅 + eval 不回归 + 版本号递增 |
+| L2 Skill 层 | `.harness/skills/pm-workers-engineering/SKILL.md` + `references/` | 协作协议、角色指令 | 中：影响所有任务的行为 | Reviewer diff 审阅 + eval 不回归 + 版本号递增 |
 | L3 Harness 层 | `install.sh` / `install.ps1`、`rsi-loop` skill、评分脚本 | 回路机制本身 | 高：改错了整个回路失真 | 人类批准，永不自动改 |
 
 原则：
@@ -210,7 +210,7 @@ evals/
 skill 结构：
 
 ```text
-.agents/skills/rsi-loop/
+.harness/skills/rsi-loop/
   SKILL.md                  # 循环协议入口
   references/
     preflight.md            # 预检清单
@@ -240,7 +240,7 @@ skill 结构：
 - **提交纪律**：L1P 永不自动 commit。循环只在工作区起草卡片，并在轮次报告中列「待人工提交」；未提交的 platform/ 变更是预期状态，不计入 rsi-loop 预检的工作区污染（§4.5 第 3 条）。
 - **门禁**：卡片不做 eval 门禁；质量门禁 = Reviewer 审阅 + 人工提交。
 - **加载纪律**：只加载与当前运行时匹配 `platform` 且任务涉及 `scope` 的卡片（渐进式披露）。
-- **导出（预留，未排期）**：`.rsi/policy.yaml` 的 `platform_knowledge.export.targets` 预留知识库目标（如 Open Viking）；同步步骤读取 `export_ready: true` 的卡片推送，目标未配置时导出为 no-op。
+- **导出（预留，未排期）**：`.harness/.rsi/policy.yaml` 的 `platform_knowledge.export.targets` 预留知识库目标（如 Open Viking）；同步步骤读取 `export_ready: true` 的卡片推送，目标未配置时导出为 no-op。
 - L1P 内部冲突同样走 §4.4 的提案审阅与防振荡条款，但即使合并结论已达成，卡片也保持未提交，等人工确认。
 
 ### 4.7 事件触发源（休眠期自动评估）
@@ -251,13 +251,13 @@ skill 结构：
 
 | 层 | 触发源 | 说明 |
 |---|---|---|
-| 核心 | git hooks：`post-merge` 立即置标记；`post-commit` 防抖——触及 `docs/engineering/**`（L1P `platform/` 除外）或 `.agents/skills/**` 的提交立即置标记，其余提交每累计 N 次（默认 5）置标记 | 所有 agent 最终都走 git 提交，天然的事件总线；已实现：`evals/install-hooks.sh` + `evals/trigger.sh` |
+| 核心 | git hooks：`post-merge` 立即置标记；`post-commit` 防抖——触及 `docs/engineering/**`（L1P `platform/` 除外）或 `.harness/skills/**` 的提交立即置标记，其余提交每累计 N 次（默认 5）置标记 | 所有 agent 最终都走 git 提交，天然的事件总线；已实现：`evals/install-hooks.sh` + `evals/trigger.sh` |
 | 核心 | OS 调度器：cron / 任务计划在夜间或机器空闲时消费标记跑评估 | 机器空闲 ≠ agent 空闲；「工程休眠阶段自动评估」由这层承担，与 rsi-loop 薄壳共用入口 |
 | 可选 | agent 内事件（Kimi 会话 cron、Claude hooks 等） | 薄适配器，允许缺失，缺省回退到前两层 |
 
 标记语义（`evals/.eval-pending`，gitignored）：hook 只置标记、不跑评估（hook 内同步拉起 agent 会阻塞用户 git 操作）。消费方 = OS 调度薄壳或下一个 agent 会话：`trigger.sh status` 检查 → 跑完整战役（`setup → 施工 → verify → check`）→ `trigger.sh consume` 清除。`check` 低于基线即停机报告（停机条件不变）。
 
-门禁不变：无人值守触发的评估结果在人工终验前属「试运行」；检测到退步时的动作是停下产报告，不是自动回滚或自动改规则。
+门禁不变：无人值守触发的评估结果在人工终验前属「试运行」；检测到退步时的动作：进入有限修复窗口（同一症结 ≤3 次归因-修复-重跑 eval，不得触碰 protected files），窗口耗尽则 `git revert` 该变异提案、写 incident 报告并停机交人工；除该提案外不自动回滚、不自动改规则。
 
 ## 5. 安全与门禁（横切设计）
 

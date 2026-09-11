@@ -52,6 +52,12 @@ Before accepting, check `issues/` (or the project's native tracker) for records 
 - a milestone must not be accepted while a related issue it was meant to fix remains open, unless the user explicitly accepts the deferral;
 - do not expand scope to unrelated open issues — note them and let the PM triage.
 
+### Build/test evidence gate
+Before accepting, confirm the verdict records BUILD and TEST evidence
+(command, status, pass/fail counts) and that `fix_attempts` is within the
+3-attempt bound. Acceptance without build/test evidence is a BLOCKER-class
+`testing` finding — unless the change genuinely has no build/test step.
+
 ## Adversarial protocol
 
 Reviewer Challenge

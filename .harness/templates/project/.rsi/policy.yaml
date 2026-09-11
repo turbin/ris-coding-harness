@@ -1,0 +1,61 @@
+# RSI policy — safety boundary for recursive self-improvement.
+# This file is an L3 (harness-layer) asset: agent self-modification must never touch it.
+schema_version: 2
+
+# Files/globs that autonomous mutation must never modify.
+protected_files:
+  - ".harness/.rsi/**"
+  - ".rsi/**"
+  - "evals/tasks/**"
+  - "evals/run-eval.*"
+  - "docs/rsi-design.md"
+  - "install.sh"
+  - "install.ps1"
+
+# Paths that must never enter an automated commit. Task-level auto-commits
+# (task_commit below) must exclude these; a human who reviewed the content
+# may bypass with `git commit --no-verify`.
+hard_blocked_files:
+  - "docs/engineering/platform/**"
+
+# Per-round mutation budget. Exceeding it requires splitting into multiple rounds.
+change_budget:
+  max_files_per_mutation: 2
+  max_diff_lines_per_mutation: 40
+
+# Gate level: observe-only | l1-auto | all-manual
+gate: l1-auto
+
+# Self-modification layers (risk ascending). L3 never auto-mutates.
+# L1P overrides L1 for matching paths.
+layers:
+  L1: "docs/engineering/**"            # project rules; default mutation target
+  L1P: "docs/engineering/platform/**"  # platform knowledge cards; never auto-committed
+  L2: ".harness/skills/**"              # collaboration protocol; needs eval non-regression
+  L3: ".harness/.rsi/**"                        # harness mechanism; human approval only
+
+# Platform knowledge (L1P) is drafted by the reflection loop but never
+# auto-committed: a human reviews and commits it, and may later export
+# export_ready cards to an external knowledge base.
+platform_knowledge:
+  auto_commit: false
+  export:
+    targets: []                        # reserved; e.g. open-viking
+
+# Task-level auto-commit gate (G5 pipeline): governs commits of PM-Workers
+# task deliverables, distinct from RSI mutation commits above.
+task_commit:
+  # auto         - commit after MILESTONE ACCEPTED + verdict with build/test
+  #                evidence (never push)
+  # observe-only - never commit task deliverables; leave work in the tree
+  # manual       - stage and prepare the message, ask the user first
+  gate: auto
+  scope:
+    include:
+      - "files touched by the task"
+      - "evals/results/**"
+      - "issues/**"
+      - "progress/**"
+    exclude:
+      - "docs/engineering/platform/**"   # L1P; see hard_blocked_files
+  push: false

@@ -7,3 +7,6 @@ evals/sandbox/
 # eval event-trigger marker (git hooks set it; evals/trigger.sh consumes it)
 evals/.eval-pending
 evals/.commit-count
+
+# local scratch (batch scripts, preflight/E2E helpers)
+tmp/

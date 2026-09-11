@@ -14,6 +14,8 @@ scores:
 issues: []                   # issue summaries surfaced this round
 rounds: 1                    # adversarial round-trips inside the task
 coder_red_green_evidence: true
+repair_attempts: 0           # build/test repair attempts in this round's task
+repair_exhausted: false      # true when the 3-attempt bound was hit
 loc_delta: {added: 12, removed: 3}
 trace_file: "traces/round-1-example-task-01.pi.jsonl"   # required (P6)
 mutations: []                # proposal IDs applied this round (observe-only: always [])

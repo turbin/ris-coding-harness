@@ -8,32 +8,47 @@
 set -u
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-POLICY="$ROOT/.rsi/policy.yaml"
+POLICY="$ROOT/.harness/.rsi/policy.yaml"
+[ -f "$POLICY" ] || POLICY="$ROOT/.rsi/policy.yaml"  # legacy layout
 
 if [ -f "$POLICY" ] && command -v python3 >/dev/null 2>&1; then
-  PROTECTED="$(python3 - "$POLICY" <<'PY'
-import fnmatch, sys
+  # Windows python builds emit CRLF; strip \r so glob entries match filenames.
+  LISTS="$(python3 - "$POLICY" <<'PY' | tr -d '\r'
+import sys
 try:
     import yaml
 except ImportError:
-    print("evals/tasks/** evals/run-eval.* docs/rsi-design.md install.sh install.ps1 .rsi/**")
+    print("P:evals/tasks/** P:evals/run-eval.* P:docs/rsi-design.md P:install.sh P:install.ps1 P:.harness/.rsi/** P:.rsi/**")
+    print("H:docs/engineering/platform/**")
     sys.exit(0)
 with open(sys.argv[1], encoding="utf-8") as f:
     doc = yaml.safe_load(f) or {}
 for g in (doc.get("protected_files") or []):
-    print(g)
+    print("P:" + g)
+for g in (doc.get("hard_blocked_files") or []):
+    print("H:" + g)
 PY
 )"
 else
-  PROTECTED='evals/tasks/** evals/run-eval.* docs/rsi-design.md install.sh install.ps1 .rsi/**'
+  LISTS='P:evals/tasks/** P:evals/run-eval.* P:docs/rsi-design.md P:install.sh P:install.ps1 P:.harness/.rsi/** P:.rsi/**
+H:docs/engineering/platform/**'
 fi
 
 blocked=0
 while IFS= read -r file; do
   [ -n "$file" ] || continue
-  for glob in $PROTECTED; do
+  for entry in $LISTS; do
+    kind="${entry%%:*}"
+    glob="${entry#*:}"
     case "$file" in
-      $glob) echo "rsi-protect: blocked change to protected file: $file" >&2; blocked=1 ;;
+      $glob)
+        if [ "$kind" = "H" ]; then
+          echo "rsi-protect: blocked L1P platform card in an automated commit: $file" >&2
+          echo "rsi-protect: a reviewed card may be committed by a human with: git commit --no-verify" >&2
+        else
+          echo "rsi-protect: blocked change to protected file: $file" >&2
+        fi
+        blocked=1 ;;
     esac
   done
 done < <(git diff --cached --name-only)

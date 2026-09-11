@@ -66,7 +66,7 @@ evals/
 评估战役的施工段需要 agent，git hook 内不执行评估——hook 只维护「待评估」标记（`evals/.eval-pending`，gitignored）：
 
 - `post-merge` → 立即置标记（理由 merge）
-- `post-commit` → 防抖：触及 `docs/engineering/**`（L1P `platform/` 除外）或 `.agents/skills/**` 的提交立即置标记；其余提交每累计 5 次置标记
+- `post-commit` → 防抖：触及 `docs/engineering/**`（L1P `platform/` 除外）或 `.harness/skills/**` 的提交立即置标记；其余提交每累计 5 次置标记
 
 安装（每个目标工程手动执行一次，幂等，不覆盖非受管 hook）：
 

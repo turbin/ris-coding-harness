@@ -21,6 +21,12 @@ itself (context isolation; identical guarantees to a shell-per-round model).
                others: save the equivalent session store, or tee the output
                stream to `round-<n>-<task-id>.log`). A round without a trace
                is INVALID — same severity as a missing verdict.
+             - SPAWN infra failure (CLI crash, timeout, no session produced)
+               is NOT a task failure: retry the spawn ONCE. A retried spawn
+               that also fails is recorded as a normal failed round with
+               `infra_failure: true` in round-<n>.yaml; it counts toward
+               stop-condition #2 like any missing-verdict round. Never retry
+               more than once — infra retries must not become an unbounded loop.
 3. COLLECT   from the sub-agent's report:
              - structured verdict (evals/results/<task-id>-<milestone>.yaml)
              - issues recorded (issues/ or project tracker)

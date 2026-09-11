@@ -1,0 +1,6 @@
+# Keep shell scripts executable on every platform: LF line endings so Git
+# Bash / Linux / macOS never see CRLF (\r breaks shebangs), and vice versa
+# PowerShell files stay LF-compatible (both pwsh 7 and Windows PowerShell
+# accept LF).
+*.sh text eol=lf
+*.ps1 text eol=lf

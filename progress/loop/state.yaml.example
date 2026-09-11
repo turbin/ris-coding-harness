@@ -17,6 +17,8 @@ counters:
   issues_by_category: {}    # {category: count}
   proposals_landed: []      # proposal IDs
   evals: []                 # results files written during the loop
+  repair_attempts_total: 0    # cumulative build/test repair attempts
+  repair_exhausted_rounds: 0  # rounds where the repair budget was exhausted
 metrics:
   last_pass_rate: null
   baseline_pass_rate: null

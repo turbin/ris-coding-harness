@@ -48,12 +48,12 @@ Windows（PowerShell 安装器）：
 - `issues/` — 缺陷与问题记录
 - `progress/` — 任务与里程碑状态、RSI 循环状态
 - `evals/` — 评估任务、结构化 verdict、基线
-- `.rsi/` — RSI 安全策略（protected files、change budget、门禁级别）
+- `.harness/.rsi/` — RSI 安全策略（protected files、change budget、门禁级别）
 
 ## RSI 循环
 
 工程接入后可按 `docs/rsi-design.md` 启用递归自我改进闭环：
 
-- PM-Workers 协议负责「做任务」（`.agents/skills/pm-workers-engineering/`）
-- rsi-loop skill 负责「跑循环」（`.agents/skills/rsi-loop/`，无人值守可选 `run-loop.sh`）
-- 变异受 `.rsi/policy.yaml` 门禁与 protected files 保护
+- PM-Workers 协议负责「做任务」（`.harness/skills/pm-workers-engineering/`）
+- rsi-loop skill 负责「跑循环」（`.harness/skills/rsi-loop/`，无人值守可选 `run-loop.sh`）
+- 变异受 `.harness/.rsi/policy.yaml` 门禁与 protected files 保护

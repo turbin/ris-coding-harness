@@ -16,7 +16,7 @@ Every milestone review decision must be recorded as a machine-readable YAML verd
 
 ## Schema version
 
-`schema_version` is currently `1`. When the schema evolves, bump the version and migrate or reinterpret older verdicts according to their recorded version.
+`schema_version` is currently `2`. When the schema evolves, bump the version and migrate or reinterpret older verdicts according to their recorded version.
 
 ## Field reference
 
@@ -42,12 +42,22 @@ rounds: 2                     # adversarial review round-trips for this mileston
 coder_red_green_evidence: true
 loc_delta: {added: 120, removed: 15}
 new_dependencies: 0
+build:                        # BUILD stage evidence (SKILL.md §7 Verify)
+  command: "npm run build"
+  status: passed              # passed | failed | skipped
+tests:                        # TEST stage evidence
+  command: "npm test"
+  status: passed              # passed | failed | skipped
+  passed: 42
+  failed: 0
+  log: "tmp/npm-test.log"     # captured output path, or null
+fix_attempts: 0               # build/test repair attempts for this milestone
 timestamp: "2026-08-27T10:41:00+08:00"
 ```
 
 ### Top-level fields
 
-- `schema_version` (int, required) — schema version; currently `1`.
+- `schema_version` (int, required) — schema version; currently `2`. Verdicts written under v1 lack `build`/`tests`/`fix_attempts`; downstream tools must treat missing fields as `unknown`, not absent.
 - `task_id` (string, required) — the PM-assigned task ID; used to join verdicts belonging to the same task.
 - `milestone` (string, required) — milestone identifier within the task; together with `task_id` it determines the file name.
 - `decision` (enum, required) — `accepted` or `rejected`. Mirrors the natural-language `MILESTONE ACCEPTED` / `MILESTONE REJECTED` decision.
@@ -78,6 +88,9 @@ timestamp: "2026-08-27T10:41:00+08:00"
 - `coder_red_green_evidence` (bool, required) — `true` when the Coder supplied credible TDD RED evidence for this milestone; `false` when RED was skipped or the evidence is not credible.
 - `loc_delta` (map, required) — `{added: <int>, removed: <int>}` net line counts for the milestone's change set.
 - `new_dependencies` (int, required) — number of new third-party dependencies introduced by this milestone.
+- `build` (map, required) — BUILD stage evidence: `command` (string), `status` (`passed` | `failed` | `skipped`), optional `log` path. `skipped` only when the change genuinely has no build step.
+- `tests` (map, required) — TEST stage evidence: `command` (string), `status` (`passed` | `failed` | `skipped`), `passed` / `failed` counts (ints, when run), optional `log` path.
+- `fix_attempts` (int, required) — build/test repair attempts made for this milestone; hard bound is 3 (SKILL.md §7).
 - `timestamp` (string, required) — ISO 8601 timestamp with timezone offset, recording when this decision was made.
 
 ## Downstream use
@@ -86,3 +99,5 @@ timestamp: "2026-08-27T10:41:00+08:00"
 - `category` + `severity` → aggregation of recurring failure patterns across tasks; feeds reflection on where the team systematically fails.
 - `coder_red_green_evidence` → makes "skipped TDD RED" directly countable.
 - `loc_delta` and `new_dependencies` → change-budget signals; correlate size/dependency growth with review outcomes.
+- `build` / `tests` → objective evidence that BUILD/TEST actually ran (G5 pipeline); acceptance without them is not auditable.
+- `fix_attempts` → self-healing telemetry: repair-loop usage and exhaustion signals.

@@ -15,7 +15,7 @@ Produce the smallest correct change consistent with the project's discovered eng
 3. RED: create or identify failing test/evidence.
 4. GREEN: make the minimum implementation change.
 5. REFACTOR: simplify only after correctness is demonstrated.
-6. Run relevant checks.
+6. Verify: BUILD then TEST with the exact commands from project rules; on failure run the bounded repair loop — max 3 attempts on the same failure, then escalate (SKILL.md §7, §13).
 7. Self-review.
 8. Explain why the changes are necessary.
 9. Submit evidence to Reviewer.
@@ -35,6 +35,11 @@ GREEN
 REFACTOR
 - Simplifications made:
 - Verification result after refactor:
+
+VERIFY (BUILD then TEST)
+- Build command / result:
+- Test command / exit code / pass-fail counts / log:
+- Failure attribution and repair attempts (if any):
 
 ## Change rationale
 

@@ -73,5 +73,5 @@ and the task touches its `scope`. Never inject all cards into context.
   matrices); quality gates are Reviewer review + human commit.
 - Export (reserved, not scheduled): a sync step reads `export_ready: true`
   cards and pushes them to the configured knowledge base
-  (`.rsi/policy.yaml` → `platform_knowledge.export.targets`, e.g.
+  (`.harness/.rsi/policy.yaml` → `platform_knowledge.export.targets`, e.g.
   Open Viking). Until a target is configured, export is a no-op.

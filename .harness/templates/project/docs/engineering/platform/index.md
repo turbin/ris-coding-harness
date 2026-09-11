@@ -7,7 +7,7 @@ constraints that hold only on one platform) live here as one card per file:
 
 Cards are drafted by the RSI reflection loop but **never auto-committed**: a human
 reviews and commits them, and may later export them to an external knowledge base
-(see `.rsi/policy.yaml` → `platform_knowledge.export.targets`).
+(see `.harness/.rsi/policy.yaml` → `platform_knowledge.export.targets`).
 
 ## Loading rule
 

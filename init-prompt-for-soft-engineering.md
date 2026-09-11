@@ -2,6 +2,17 @@
 
 该工程初始化方式已从“大型初始化 Prompt”迁移为可重复执行的安装器。
 
+## 前置检查（已接入工程）
+
+工程已接入但不确定必需 Skill 是否齐备时，先运行只读检测（不创建目录、不写任何文件）：
+
+```bash
+./install.sh --target . --check   # 或安装器所在路径
+```
+
+- 全部齐备（退出码 0）：无需操作；
+- 缺失/不完整（退出码 1）：按提示重跑安装器补齐——安装器只补缺失文件，不覆盖已有定制。
+
 推荐直接运行：
 
 ```bash
@@ -40,12 +51,13 @@ Windows（PowerShell 安装器）：
 - `issues/` — 缺陷与问题记录
 - `progress/` — 任务与里程碑状态、RSI 循环状态
 - `evals/` — 评估任务、结构化 verdict、基线
-- `.rsi/` — RSI 安全策略（protected files、change budget、门禁级别）
+- `.harness/.rsi/` — RSI 安全策略（protected files、change budget、门禁级别）
+- `.harness/skills/` — 必需 Skill 资产（`pm-workers-engineering` / `rsi-loop`），应随仓库提交；克隆后缺失同样用 `--check` 检测并重跑安装器补齐
 
 ## RSI 循环
 
 工程接入后可按 `docs/rsi-design.md` 启用递归自我改进闭环：
 
-- PM-Workers 协议负责「做任务」（`.agents/skills/pm-workers-engineering/`）
-- rsi-loop skill 负责「跑循环」（`.agents/skills/rsi-loop/`，无人值守可选 `run-loop.sh`）
-- 变异受 `.rsi/policy.yaml` 门禁与 protected files 保护
+- PM-Workers 协议负责「做任务」（`.harness/skills/pm-workers-engineering/`）
+- rsi-loop skill 负责「跑循环」（`.harness/skills/rsi-loop/`，无人值守可选 `run-loop.sh`）
+- 变异受 `.harness/.rsi/policy.yaml` 门禁与 protected files 保护

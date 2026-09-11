@@ -79,7 +79,7 @@ fi
 
 RESUME_FLAG=""
 [ "$RESUME" -eq 1 ] && RESUME_FLAG="--resume"
-PROMPT="Invoke the rsi-loop skill (skills/rsi-loop/SKILL.md, or .agents/skills/rsi-loop/ in the target project) with: --gate $GATE --rounds $ROUNDS $QUEUE $RESUME_FLAG. Read the skill and follow its procedure."
+PROMPT="Invoke the rsi-loop skill (skills/rsi-loop/SKILL.md, or .harness/skills/rsi-loop/ in the target project) with: --gate $GATE --rounds $ROUNDS $QUEUE $RESUME_FLAG. Read the skill and follow its procedure."
 
 echo "gate: $GATE   rounds: $ROUNDS   agent: $AGENT_CMD   headless: $([ "$HEADLESS" -eq 1 ] && echo yes || echo no)   resume: $([ "$RESUME" -eq 1 ] && echo yes || echo no)"
 if [ "$DRY_RUN" -eq 1 ]; then
@@ -87,10 +87,17 @@ if [ "$DRY_RUN" -eq 1 ]; then
   exit 0
 fi
 if [ "$HEADLESS" -eq 1 ]; then
-  case "$AGENT_CMD" in
-    pi)   exec pi -p "$PROMPT" ;;
-    kimi) exec kimi -p "$PROMPT" --print ;;
-    *)    exec "$AGENT_CMD" "$PROMPT" ;;
+  # Headless invocation per agent CLI (verified against each CLI's help/docs).
+  agent_name="${AGENT_CMD%% *}"
+  case "$agent_name" in
+    pi)       exec pi -p "$PROMPT" ;;
+    kimi)     exec kimi -p "$PROMPT" ;;
+    claude)   exec claude -p "$PROMPT" ;;
+    codex)    exec codex exec "$PROMPT" ;;
+    opencode) exec opencode run "$PROMPT" ;;
+    *)
+      echo "warn: no headless mapping for '$agent_name'; passing prompt as a single argument" >&2
+      exec "$AGENT_CMD" "$PROMPT" ;;
   esac
 fi
 exec $AGENT_CMD "$PROMPT"

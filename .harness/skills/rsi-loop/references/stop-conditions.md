@@ -4,13 +4,16 @@ Hardcoded conditions, checked **after every round** (and before the loop
 starts via preflight). If any condition trips, the loop stops immediately:
 write `progress/loop/incident-<timestamp>.md` with the condition, evidence,
 and current state, then return control to the human. No further mutation
-happens after a stop.
+happens after a stop. Repair attempts happen only **before** any stop
+decision (inside the round); a repair that exhausts its budget is recorded
+in the round report and counts as task failure evidence for condition #2 —
+it never extends the loop.
 
 ## Hard stops
 
 | # | Condition | Evidence to record |
 |---|---|---|
-| 1 | Eval regression: `pass@1` after a mutation is below `evals/baseline.json` `pass_rate` | `run-eval.sh check` output; results file path |
+| 1 | Eval regression: `pass@1` after a mutation is below `evals/baseline.json` `pass_rate` | **Repair window first**: ≤3 targeted attempts on the failing mutation (each re-runs eval; protected files stay untouchable), then `git revert` that mutation's commit, write the incident report, stop. Hard stop if the window or the revert also fails | `run-eval.sh check` output; results file path; revert commit id |
 | 2 | Consecutive task failures: 3 rounds in a row with `decision: rejected` or missing verdict | round files 3..n-1, verdict status |
 | 3 | Git state pollution: uncommitted changes to protected files, or a mutation commit that cannot be reverted cleanly | `git status --porcelain`, `git log` |
 | 4 | Preflight failure at start (see `preflight.md`) | preflight report path |

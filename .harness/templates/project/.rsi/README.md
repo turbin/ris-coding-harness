@@ -1,6 +1,6 @@
 # .rsi/ — RSI Harness Mechanism (L3)
 
-`.rsi/` is the mechanism-layer configuration of the recursive self-improvement
+`.harness/.rsi/` is the mechanism-layer configuration of the recursive self-improvement
 (RSI) harness. It is an L3 asset: autonomous agent mutation must never modify
 anything under this directory.
 
