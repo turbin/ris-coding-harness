@@ -211,13 +211,13 @@ $TmpRoot = $null
 try {
   $SourceRoot = $null
   if ($PSScriptRoot -and
-      (Test-Path (Join-Path $PSScriptRoot ".harness/templates/project/AGENTS.md")) -and
+      (Test-Path (Join-Path $PSScriptRoot ".harness/templates/project/docs/engineering/index.md")) -and
       (Test-Path (Join-Path $PSScriptRoot ".harness/skills"))) {
     # Repo self-hosts its mechanism layer under .harness/ (G1).
     $SourceRoot = Join-Path $PSScriptRoot ".harness"
   }
   elseif ($PSScriptRoot -and
-      (Test-Path (Join-Path $PSScriptRoot "templates/project/AGENTS.md")) -and
+      (Test-Path (Join-Path $PSScriptRoot "templates/project/docs/engineering/index.md")) -and
       (Test-Path (Join-Path $PSScriptRoot "skills"))) {
     # Legacy repo layout (mechanism layer at repo root).
     $SourceRoot = $PSScriptRoot
@@ -232,10 +232,10 @@ try {
     $SourceRoot = Get-ChildItem -Path $TmpRoot -Directory |
       Where-Object { $_.Name -ne "source" } |
       Select-Object -First 1 -ExpandProperty FullName
-    if (Test-Path (Join-Path $SourceRoot ".harness/templates/project/AGENTS.md")) {
+    if (Test-Path (Join-Path $SourceRoot ".harness/templates/project/docs/engineering/index.md")) {
       $SourceRoot = Join-Path $SourceRoot ".harness"
     }
-    if (-not $SourceRoot -or -not (Test-Path (Join-Path $SourceRoot "templates/project/AGENTS.md"))) {
+    if (-not $SourceRoot -or -not (Test-Path (Join-Path $SourceRoot "templates/project/docs/engineering/index.md"))) {
       Write-Error "Installer templates not found in $Repo@$Ref"
     }
   }

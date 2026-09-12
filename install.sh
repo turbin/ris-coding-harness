@@ -116,10 +116,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/.harness/templates/project/AGENTS.md" ] && [ -d "$SCRIPT_DIR/.harness/skills" ]; then
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/.harness/templates/project/docs/engineering/index.md" ] && [ -d "$SCRIPT_DIR/.harness/skills" ]; then
   # Repo self-hosts its mechanism layer under .harness/ (G1).
   SOURCE_ROOT="$SCRIPT_DIR/.harness"
-elif [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/templates/project/AGENTS.md" ] && [ -d "$SCRIPT_DIR/skills" ]; then
+elif [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/templates/project/docs/engineering/index.md" ] && [ -d "$SCRIPT_DIR/skills" ]; then
   # Legacy repo layout (mechanism layer at repo root).
   SOURCE_ROOT="$SCRIPT_DIR"
 else
@@ -130,10 +130,10 @@ else
   curl -fsSL "https://github.com/$REPO/archive/$REF.tar.gz" -o "$ARCHIVE"
   tar -xzf "$ARCHIVE" -C "$TMP_ROOT"
   SOURCE_ROOT="$(find "$TMP_ROOT" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-  if [ -f "$SOURCE_ROOT/.harness/templates/project/AGENTS.md" ]; then
+  if [ -f "$SOURCE_ROOT/.harness/templates/project/docs/engineering/index.md" ]; then
     SOURCE_ROOT="$SOURCE_ROOT/.harness"
   fi
-  [ -f "$SOURCE_ROOT/templates/project/AGENTS.md" ] || { echo "Installer templates not found in $REPO@$REF" >&2; exit 1; }
+  [ -f "$SOURCE_ROOT/templates/project/docs/engineering/index.md" ] || { echo "Installer templates not found in $REPO@$REF" >&2; exit 1; }
 fi
 
 managed_copy() {
