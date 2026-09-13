@@ -325,6 +325,57 @@ $($script:EndMark)
     $script:InstalledFiles += $File
   }
 
+
+  function Migrate-One([string]$File, [string]$LegacyRoot, [string]$SourceRoot, [string]$NewRoot) {
+    $rel = $File.Substring($LegacyRoot.Length).TrimStart('\', '/')
+    $src = Join-Path $SourceRoot $rel
+    $dst = Join-Path $NewRoot $rel
+    if (-not (Test-Path -LiteralPath $src)) {
+      Write-Host ("legacy   {0} (no managed counterpart; left in place)" -f (Get-RelPath $File))
+      return
+    }
+    # Only a legacy file byte-identical to the managed source may be moved or
+    # deduplicated; anything else is user content and stays untouched.
+    if ((Get-FileHash -LiteralPath $src).Hash -ne (Get-FileHash -LiteralPath $File).Hash) {
+      if (Test-Path -LiteralPath $dst) {
+        Write-Host ("legacy   {0} (differs from managed copy; left in place)" -f (Get-RelPath $File))
+      } else {
+        Write-Host ("legacy   {0} (customized; left in place)" -f (Get-RelPath $File))
+      }
+      return
+    }
+    if (Test-Path -LiteralPath $dst) {
+      Remove-Item -LiteralPath $File -Force
+    } else {
+      New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
+      Move-Item -LiteralPath $File -Destination $dst -Force
+      $script:InstalledFiles += $dst
+    }
+  }
+
+  function Migrate-Legacy {
+    $ran = $false
+    $legacySkills = Join-Path $TargetRoot ".agents/skills"
+    if ((-not $NoSkill) -and (Test-Path -LiteralPath $legacySkills)) {
+      Get-ChildItem -LiteralPath $legacySkills -Recurse -File | ForEach-Object {
+        Migrate-One $_.FullName $legacySkills (Join-Path $SourceRoot "skills") (Join-Path $TargetRoot ".harness/skills")
+      }
+      Get-ChildItem -LiteralPath $legacySkills -Recurse -Directory | Sort-Object { $_.FullName.Length } -Descending |
+        Where-Object { -not ($_.GetFiles() -or $_.GetDirectories()) } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+      $ran = $true
+    }
+    $legacyRsi = Join-Path $TargetRoot ".rsi"
+    if (Test-Path -LiteralPath $legacyRsi) {
+      Get-ChildItem -LiteralPath $legacyRsi -Recurse -File | ForEach-Object {
+        Migrate-One $_.FullName $legacyRsi (Join-Path $SourceRoot "templates/project/.rsi") (Join-Path $TargetRoot ".harness/.rsi")
+      }
+      Get-ChildItem -LiteralPath $legacyRsi -Recurse -Directory | Sort-Object { $_.FullName.Length } -Descending |
+        Where-Object { -not ($_.GetFiles() -or $_.GetDirectories()) } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+      $ran = $true
+    }
+    if ($ran) { Write-Host "migrate  legacy layout: identical files moved into .harness/; customized files left in place (see legacy lines above)" }
+  }
+
   function Write-Manifest {
     $manDir = Join-Path $TargetRoot ".harness"
     New-Item -ItemType Directory -Force -Path $manDir | Out-Null
@@ -500,6 +551,8 @@ $($script:EndMark)
       Managed-Copy $_.FullName (Join-Path $TargetRoot (".harness/.rsi/" + $rel))
     }
   }
+
+  Migrate-Legacy
 
   $IndexBody = @'
 # Index

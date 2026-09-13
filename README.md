@@ -148,7 +148,11 @@ Skill 目录不完整（如 `SKILL.md` 被删）时，直接重跑安装器即�
 
 ### run-loop headless 支持矩阵
 
-`run-loop.sh --headless` 已按各 CLI 官方用法适配：`pi -p`、`kimi -p`、`claude -p`、`codex exec`、`opencode run`；未适配的 CLI 回退为「整条提示词作为单个参数传入」并在 stderr 告警。
+`run-loop.sh --headless` 已按各 CLI 官方用法适配：`pi -p`、`kimi -p`、`claude -p`、`codex exec`、`opencode run`；未适配的 CLI 回退为「整条提示词作为单个参数传入」并在 stderr 告警。Windows 无人值守入口另有 PowerShell 移植 `run-loop.ps1`（参数与解析顺序一致）。
+
+### legacy 布局自动迁移
+
+对仍是旧布局（`.agents/skills/`、`.rsi/`）的已接入工程，重跑安装器即自动迁移：与受管源**逐字节一致**的文件移入 `.harness/`（或去重删除），被定制过/过旧的文件**原地保留**并逐条报告——安装器只动它能证明是未改受管副本的文件，绝不删除用户内容。
 
 ## 安装内容
 
@@ -320,9 +324,10 @@ Agent 首先读取 `AGENTS.md`，再读取 `docs/engineering/index.md`，只加�
 ./tests/install-smoke.sh        # macOS / Linux
 pwsh ./tests/install-smoke.ps1  # Windows（PowerShell 5.1+ / pwsh 7+）
 ./tests/trigger-smoke.sh        # 事件触发 hook 的置标/防抖/消费生命周期
+./evals/run-eval.sh verdicts    # verdict yaml 机械校验（schema v2，v1 兼容告警）
 ```
 
-覆盖：`init`/`adopt` 自动模式判断、核心文件落位（含 `.harness/.rsi/` 策略与 `evals/results/`）、已有工程不被重排、重复执行的非破坏性、`--agent` 多目标分发与重复传参、未知 agent 的 fail-fast、`--check` 三态（missing / ok / incomplete）与零写入保证、退出码契约（用法错误 = 2）、env 阶段四态（dry-run 不执行 / 失败仅告警 / `--strict-env` 退出 3 / `--skip-env` 零写入）。
+覆盖：`init`/`adopt` 自动模式判断、核心文件落位（含 `.harness/.rsi/` 策略与 `evals/results/`）、已有工程不被重排、重复执行的非破坏性、`--agent` 多目标分发与重复传参、未知 agent 的 fail-fast、`--check` 三态（missing / ok / incomplete）与零写入保证、退出码契约（用法错误 = 2）、env 阶段四态（dry-run 不执行 / 失败仅告警 / `--strict-env` 退出 3 / `--skip-env` 零写入）、AGENTS.md/CLAUDE.md 标记合并与刷新幂等、legacy 布局自动迁移（同件搬走 / 定制留原地）。
 
 ## 旧入口
 

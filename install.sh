@@ -346,6 +346,61 @@ AWKPROG
 $file"
 }
 
+
+# --- Legacy layout migration (G1) ----------------------------------------------
+# Files identical to the managed source move into .harness/; customized or
+# outdated files stay in place and are reported. The installer never deletes
+# content it cannot prove is an unmodified managed copy.
+migrate_one() {
+  # $1 = legacy file, $2 = legacy root prefix, $3 = managed source root, $4 = new root
+  f="$1"; lroot="$2"; sroot="$3"; nroot="$4"
+  rel="${f#$lroot/}"
+  src="$sroot/$rel"
+  dst="$nroot/$rel"
+  if [ ! -f "$src" ]; then
+    printf 'legacy   %s (no managed counterpart; left in place)\n' "${f#$TARGET/}"
+    return 0
+  fi
+  # Only a legacy file BYTE-IDENTICAL to the managed source may be moved or
+  # deduplicated; anything else is user content and stays untouched.
+  if ! cmp -s "$src" "$f"; then
+    if [ -f "$dst" ]; then
+      printf 'legacy   %s (differs from managed copy; left in place)\n' "${f#$TARGET/}"
+    else
+      printf 'legacy   %s (customized; left in place)\n' "${f#$TARGET/}"
+    fi
+    return 0
+  fi
+  if [ -f "$dst" ]; then
+    rm -f "$f"
+  else
+    mkdir -p "$(dirname "$dst")"
+    mv "$f" "$dst"
+    INSTALLED_FILES="$INSTALLED_FILES
+$dst"
+  fi
+  return 0
+}
+
+migrate_legacy() {
+  migrated=0
+  if [ "$INSTALL_SKILL" -eq 1 ] && [ -d "$TARGET/.agents/skills" ]; then
+    while IFS= read -r -d '' f; do
+      migrate_one "$f" "$TARGET/.agents/skills" "$SOURCE_ROOT/skills" "$TARGET/.harness/skills"
+    done < <(find "$TARGET/.agents/skills" -type f -print0 2>/dev/null)
+    find "$TARGET/.agents/skills" -depth -type d -empty -delete 2>/dev/null || true
+    migrated=1
+  fi
+  if [ -d "$TARGET/.rsi" ]; then
+    while IFS= read -r -d '' f; do
+      migrate_one "$f" "$TARGET/.rsi" "$SOURCE_ROOT/templates/project/.rsi" "$TARGET/.harness/.rsi"
+    done < <(find "$TARGET/.rsi" -type f -print0 2>/dev/null)
+    find "$TARGET/.rsi" -depth -type d -empty -delete 2>/dev/null || true
+    migrated=1
+  fi
+  [ "$migrated" -eq 0 ] || echo "migrate  legacy layout: identical files moved into .harness/; customized files left in place (see legacy lines above)"
+}
+
 hash_file() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" | awk '{print $1}'
@@ -488,6 +543,8 @@ if [ -d "$RSI_SRC" ]; then
     managed_copy "$f" "$TARGET/.harness/.rsi/$rel"
   done < <(find "$RSI_SRC" -type f -print0)
 fi
+
+migrate_legacy
 
 INDEX_BODY='# Index
 

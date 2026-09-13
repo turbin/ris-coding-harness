@@ -185,6 +185,20 @@ exit 0
   Assert-True ($LASTEXITCODE -eq 1) "legacy-only project must fail check"
   Assert-True (($checkOut -join "`n") -match "legacy") "legacy-only report line"
 
+  # Legacy migration: identical files move into .harness/; customized stay + reported.
+  $Mig = Join-Path $Tmp "migproj"
+  New-Item -ItemType Directory -Force -Path (Join-Path $Mig ".agents/skills/rsi-loop/references"), (Join-Path $Mig ".rsi") | Out-Null
+  [System.IO.File]::WriteAllText((Join-Path $Mig ".agents/skills/rsi-loop/references/stop-conditions.md"), "customized by hand`n")
+  [System.IO.File]::WriteAllText((Join-Path $Mig ".rsi/policy.yaml"), "customized policy`n")
+  Copy-Item (Join-Path $Root ".harness/skills/rsi-loop/references/gate-policy.md") (Join-Path $Mig ".agents/skills/rsi-loop/references/gate-policy.md")
+  $migOut = & (Join-Path $Root "install.ps1") -Target $Mig -Mode adopt -NoGit 6>&1
+  Assert-True (-not (Test-Path (Join-Path $Mig ".agents/skills/rsi-loop/references/gate-policy.md"))) "identical legacy file must move"
+  Assert-True (Test-Path (Join-Path $Mig ".agents/skills/rsi-loop/references/stop-conditions.md")) "customized legacy file stays"
+  Assert-True (Test-Path (Join-Path $Mig ".harness/skills/rsi-loop/references/stop-conditions.md")) "managed copy installed"
+  Assert-True (Test-Path (Join-Path $Mig ".harness/.rsi/policy.yaml")) "managed policy installed"
+  Assert-True (Test-Path (Join-Path $Mig ".rsi/policy.yaml")) "customized legacy policy stays"
+  Assert-True (($migOut -join "`n") -match "left in place") "customized leftovers reported"
+
   Write-Host "install smoke test: PASS"
 }
 finally {

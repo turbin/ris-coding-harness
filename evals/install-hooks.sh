@@ -54,7 +54,10 @@ write_hook() {
   cat > "$file" <<EOF
 #!/usr/bin/env bash
 # managed by ris-coding-harness: eval trigger ($event)
-ROOT="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")/../.." && pwd)"
+# Resolve the repo root at runtime: hooks may live under a custom
+# core.hooksPath, so the relative ../.. walk is only a fallback.
+ROOT="\$(git rev-parse --show-toplevel 2>/dev/null)"
+[ -n "\$ROOT" ] || ROOT="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")/../.." && pwd)"
 "\$ROOT/evals/trigger.sh" $event || true
 EOF
   chmod +x "$file"

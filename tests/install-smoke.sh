@@ -181,4 +181,18 @@ if out="$("$ROOT/install.sh" --target "$TMP/legacyonly" --check 2>&1)"; then
 fi
 printf '%s\n' "$out" | grep -q 'legacy'
 
+# Legacy migration: files identical to the managed source move into .harness/;
+# customized files stay in place and are reported.
+mkdir -p "$TMP/migproj/.agents/skills/rsi-loop/references" "$TMP/migproj/.rsi"
+printf 'customized by hand\n' > "$TMP/migproj/.agents/skills/rsi-loop/references/stop-conditions.md"
+printf 'customized policy\n' > "$TMP/migproj/.rsi/policy.yaml"
+cp "$ROOT/.harness/skills/rsi-loop/references/gate-policy.md" "$TMP/migproj/.agents/skills/rsi-loop/references/gate-policy.md"
+out="$("$ROOT/install.sh" --target "$TMP/migproj" --mode adopt --no-git 2>&1)"
+test ! -e "$TMP/migproj/.agents/skills/rsi-loop/references/gate-policy.md"
+test -f "$TMP/migproj/.agents/skills/rsi-loop/references/stop-conditions.md"
+test -f "$TMP/migproj/.harness/skills/rsi-loop/references/stop-conditions.md"
+test -f "$TMP/migproj/.harness/.rsi/policy.yaml"
+test -f "$TMP/migproj/.rsi/policy.yaml"
+printf '%s\n' "$out" | grep -q 'left in place'
+
 echo "install smoke test: PASS"

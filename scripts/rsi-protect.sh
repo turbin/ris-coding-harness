@@ -11,9 +11,17 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 POLICY="$ROOT/.harness/.rsi/policy.yaml"
 [ -f "$POLICY" ] || POLICY="$ROOT/.rsi/policy.yaml"  # legacy layout
 
-if [ -f "$POLICY" ] && command -v python3 >/dev/null 2>&1; then
+FALLBACK_LISTS='P:evals/tasks/** P:evals/run-eval.* P:docs/rsi-design.md P:install.sh P:install.ps1 P:.harness/.rsi/** P:.rsi/**
+H:docs/engineering/platform/**'
+
+PYBIN=""
+for c in python3 python py; do
+  if command -v "$c" >/dev/null 2>&1; then PYBIN="$c"; break; fi
+done
+
+if [ -f "$POLICY" ] && [ -n "$PYBIN" ]; then
   # Windows python builds emit CRLF; strip \r so glob entries match filenames.
-  LISTS="$(python3 - "$POLICY" <<'PY' | tr -d '\r'
+  LISTS="$("$PYBIN" - "$POLICY" <<'PY' | tr -d '\r'
 import sys
 try:
     import yaml
@@ -29,9 +37,11 @@ for g in (doc.get("hard_blocked_files") or []):
     print("H:" + g)
 PY
 )"
+elif [ -f "$POLICY" ]; then
+  echo "rsi-protect: WARNING: $POLICY exists but no python interpreter found (tried python3, python, py); using builtin lists - policy customizations are NOT enforced" >&2
+  LISTS="$FALLBACK_LISTS"
 else
-  LISTS='P:evals/tasks/** P:evals/run-eval.* P:docs/rsi-design.md P:install.sh P:install.ps1 P:.harness/.rsi/** P:.rsi/**
-H:docs/engineering/platform/**'
+  LISTS="$FALLBACK_LISTS"
 fi
 
 blocked=0
