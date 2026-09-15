@@ -10,3 +10,6 @@ evals/.commit-count
 
 # local scratch (batch scripts, preflight/E2E helpers)
 tmp/
+
+# compact-recall per-session recall markers (local state)
+conversations/.state/

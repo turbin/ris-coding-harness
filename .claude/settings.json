@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "PostCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/compact-archive.sh\" --flavor claude",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/session-recall.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

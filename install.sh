@@ -544,6 +544,58 @@ if [ -d "$RSI_SRC" ]; then
   done < <(find "$RSI_SRC" -type f -print0)
 fi
 
+# Distribute the Kimi Code compact-recall hook scripts (PostCompact archive +
+# UserPromptSubmit recall). Canonical copies live in the harness repo's own
+# scripts/ directory; SOURCE_ROOT may have been re-rooted into .harness.
+HOOK_SRC_ROOT="$SOURCE_ROOT"
+if [ ! -f "$HOOK_SRC_ROOT/scripts/compact-archive.sh" ]; then
+  HOOK_SRC_ROOT="$(cd "$(dirname "$SOURCE_ROOT")" && pwd)"
+fi
+for name in compact-archive.sh compact-archive.ps1 compact-archive.py \
+            session-recall.sh session-recall.ps1 session-recall.py \
+            install-kimi-hooks.sh install-kimi-hooks.ps1 \
+            install-agent-hooks.py install-agent-hooks.sh install-agent-hooks.ps1 \
+            compact-recall.pi.ts compact-recall.opencode.ts; do
+  if [ -f "$HOOK_SRC_ROOT/scripts/$name" ]; then
+    managed_copy "$HOOK_SRC_ROOT/scripts/$name" "$TARGET/scripts/$name"
+  fi
+done
+
+# Adapt and install compact-recall hooks for every agent selected via
+# --agent (best effort: a failure warns but never fails the install).
+if [ -n "$AGENTS_LIST" ]; then
+  requested=""
+  OLD_IFS="$IFS"; IFS=','
+  for a in $AGENTS_LIST; do
+    a="$(printf '%s' "$a" | tr '[:upper:]' '[:lower:]')"
+    [ -n "$a" ] || continue
+    if [ "$a" = "all" ]; then
+      requested="$requested claude pi kimi opencode codex"
+    else
+      requested="$requested $a"
+    fi
+  done
+  IFS="$OLD_IFS"
+  seen=" "
+  for a in $requested; do
+    case "$a" in kimi-code) a=kimi ;; agents) continue ;; esac
+    case " claude pi kimi opencode codex " in *" $a "*) ;; *) continue ;; esac
+    case "$seen" in *" $a "*) continue ;; esac
+    seen="$seen$a "
+    py=""
+    for c in python3 python py; do
+      if command -v "$c" >/dev/null 2>&1; then py="$c"; break; fi
+    done
+    if [ -z "$py" ]; then
+      echo "warn: no python interpreter; skipping $a hooks"
+      continue
+    fi
+    echo "hooks  $a"
+    "$py" "$TARGET/scripts/install-agent-hooks.py" "$a" --target "$TARGET" --scope "$SCOPE" \
+      || echo "warn: $a hook adaptation failed (non-fatal)"
+  done
+fi
+
 migrate_legacy
 
 INDEX_BODY='# Index
@@ -571,6 +623,9 @@ for d in decisions issues progress; do
   fi
 done
 
+# compact-recall hook state: archived summaries + per-session recall markers.
+mkdir -p "$TARGET/conversations/archive" "$TARGET/conversations/.state"
+
 write_manifest
 
 if [ ! -f "$TARGET/.gitignore" ]; then
@@ -597,6 +652,9 @@ __pycache__/
 # Temporary project artifacts
 tmp/*
 !tmp/index.md
+
+# compact-recall per-session recall markers (local state)
+conversations/.state/
 
 # OS / editor noise
 .DS_Store

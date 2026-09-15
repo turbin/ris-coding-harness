@@ -1,0 +1,31 @@
+{
+  "description": "Optional lifecycle hooks for this workspace.",
+  "hooks": {
+    "PostCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"E:/workspace/ris-coding-harness/scripts/compact-archive.py\" --flavor codex",
+            "timeout": 30,
+            "async": true,
+            "statusMessage": "Archiving compaction summary"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"E:/workspace/ris-coding-harness/scripts/session-recall.py\"",
+            "timeout": 10,
+            "additionalContextLimit": 5000
+          }
+        ]
+      }
+    ]
+  }
+}

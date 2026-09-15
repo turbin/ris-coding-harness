@@ -552,6 +552,55 @@ $($script:EndMark)
     }
   }
 
+  # Distribute the Kimi Code compact-recall hook scripts (PostCompact archive +
+  # UserPromptSubmit recall). Canonical copies live in the harness repo's own
+  # scripts/ directory; $SourceRoot may have been re-rooted into .harness.
+  $HookSrcRoot = $SourceRoot
+  if (-not (Test-Path (Join-Path $HookSrcRoot "scripts/compact-archive.sh"))) {
+    $HookSrcRoot = Split-Path $SourceRoot -Parent
+  }
+  foreach ($name in @("compact-archive.sh", "compact-archive.ps1", "compact-archive.py",
+                      "session-recall.sh", "session-recall.ps1", "session-recall.py",
+                      "install-kimi-hooks.sh", "install-kimi-hooks.ps1",
+                      "install-agent-hooks.py", "install-agent-hooks.sh", "install-agent-hooks.ps1",
+                      "compact-recall.pi.ts", "compact-recall.opencode.ts")) {
+    $src = Join-Path $HookSrcRoot "scripts/$name"
+    if (Test-Path $src) { Managed-Copy $src (Join-Path $TargetRoot "scripts/$name") }
+  }
+
+  # Adapt and install compact-recall hooks for every agent selected via -Agent
+  # (best effort: a failure warns but never fails the install).
+  if ($Agent) {
+    $requested = @()
+    foreach ($item in $Agent) {
+      foreach ($a in ($item -split ',')) {
+        $a = $a.Trim().ToLowerInvariant()
+        if (-not $a) { continue }
+        if ($a -eq "all") { $requested += @("claude", "pi", "kimi", "opencode", "codex") } else { $requested += $a }
+      }
+    }
+    $seen = @{}
+    foreach ($a in $requested) {
+      if ($a -eq "kimi-code") { $a = "kimi" }
+      if ($a -eq "agents") { continue }
+      if (@("claude", "pi", "kimi", "opencode", "codex") -notcontains $a) { continue }
+      if ($seen.ContainsKey($a)) { continue }
+      $seen[$a] = $true
+      $py = $null
+      foreach ($c in @('python', 'python3', 'py')) {
+        $cmd = Get-Command $c -ErrorAction SilentlyContinue
+        if ($cmd) { $py = $cmd.Source; break }
+      }
+      if (-not $py) {
+        Write-Host "warn: no python interpreter; skipping $a hooks"
+        continue
+      }
+      Write-Host "hooks  $a"
+      & $py (Join-Path $TargetRoot "scripts/install-agent-hooks.py") $a --target $TargetRoot --scope $Scope
+      if ($LASTEXITCODE -ne 0) { Write-Host "warn: $a hook adaptation failed (non-fatal)" }
+    }
+  }
+
   Migrate-Legacy
 
   $IndexBody = @'
@@ -581,6 +630,9 @@ Use this file as a lightweight navigation surface. Keep entries concise and poin
     }
   }
 
+  # compact-recall hook state: archived summaries + per-session recall markers.
+  New-Item -ItemType Directory -Force -Path (Join-Path $TargetRoot "conversations/archive"), (Join-Path $TargetRoot "conversations/.state") | Out-Null
+
   Write-Manifest
 
   if (-not (Test-Path (Join-Path $TargetRoot ".gitignore"))) {
@@ -607,6 +659,9 @@ __pycache__/
 # Temporary project artifacts
 tmp/*
 !tmp/index.md
+
+# compact-recall per-session recall markers (local state)
+conversations/.state/
 
 # OS / editor noise
 .DS_Store

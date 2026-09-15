@@ -296,6 +296,32 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 - **与 rsi-loop 的关系**：rsi-loop 的每一轮子代理工作 ≈ 一次 min-loop；min-loop 只交付、不进化，是 rsi-loop 的最小切片。
 - **实现分支**：本仓库 `feat/min-loop` 分支承载最小闭环的完整实现（`skills/min-loop/SKILL.md` + `run-specs.sh` + 安装分发）；**main 分支当前不包含该代码**，本章节为说明入口，使用前请 `git checkout feat/min-loop`（或将其合并回 main 后此处同步更新）。
 
+### 5. 跨会话对话记忆（compact-recall）
+
+把每次上下文压缩（`/compact` 或自动压缩）产生的摘要原文归档到工程内 `conversations/`，新 session 首次提问时自动注入近期归档简报——模型被要求"回顾之前的工作"时可按时间远近检索并读取摘要，跨会话不丢上下文。**install 阶段按 `--agent` 选择自动完成各 agent 的 hook 适配**：
+
+| Agent | 适配机制 | 安装位置（project 作用域） |
+|---|---|---|
+| kimi / kimi-code | `PostCompact` + `UserPromptSubmit` hook | 用户级 `~/.kimi-code/config.toml` 受管块（scope 对该 agent 固定为 user） |
+| claude | `PostCompact`（payload 直带 `compact_summary`）+ `UserPromptSubmit` | `<project>/.claude/settings.json` |
+| codex | `PostCompact`（transcript 提取，async 后台）+ `UserPromptSubmit` | `<project>/.codex/hooks.json` |
+| pi | TypeScript extension（`session_compact` / `before_agent_start`，桥接到同一套 python 脚本） | `<project>/.pi/extensions/compact-recall.ts` |
+| opencode | TS plugin（`session.compacted` 事件 / `chat.message` hook） | `<project>/.opencode/plugins/compact-recall.ts` |
+
+```bash
+./install.sh --target . --agent claude,codex        # 装 skill 的同时适配并注册 hooks
+./install.sh --target . --agent all --scope user    # 全 agent、用户级目录
+# 已装工程补装/重装某个 agent 的 hooks：
+python scripts/install-agent-hooks.py pi --target . --scope project
+```
+
+- **数据**：`conversations/archive/<session_id>/<compact_time>.md`（摘要原文，front matter 含 session id、标题、cwd、时间、manual/auto 来源）；`conversations/index.md` 为倒序索引表（越新越可信）；`conversations/.state/` 为本地 marker（已 gitignore）。
+- **幂等**：重复执行只替换受管块/受管组，不动其他配置；卸载＝删除对应配置里的受管段（kimi 标记块、claude/codex 含 compact-archive/session-recall 的组、pi/opencode 的 adapter 文件）。
+- **机制**：压缩归档 fail-open（失败不影响压缩）；回顾注入每 session 一次、索引更新后重发。归档只读 agent 会话数据。kimi 以外 agent 的摘要来源：claude 取 payload `compact_summary`，codex 取 transcript `type:"compacted"` 行，pi/opencode 由 TS 适配器从事件/会话中取后喂同一契约。
+- **使用注意**：codex 需在 CLI 里 `/hooks` 审核信任一次；pi 工程级 extension 需要项目信任（交互批准，或 headless 用 `--approve` / `defaultProjectTrust: always`）；claude 的 hook 在 Windows 上默认 Git Bash 执行。pi/opencode 适配器依赖 python（`python`/`python3`/`py`）在 PATH。
+- **模型侧约定**：根 `AGENTS.md` 内置回顾路由——先读 `conversations/index.md` 选条目，再读归档原文；引用注明时间与 session id，旧摘要以仓库现状核实。
+- **隐私**：摘要可能含代码片段与文件路径，属本地工程数据；提交/分享前请自查 `conversations/archive/` 内容。
+
 ## 设计原则
 
 ### 1. Skill 与工程规则分离
@@ -324,6 +350,7 @@ Agent 首先读取 `AGENTS.md`，再读取 `docs/engineering/index.md`，只加�
 ./tests/install-smoke.sh        # macOS / Linux
 pwsh ./tests/install-smoke.ps1  # Windows（PowerShell 5.1+ / pwsh 7+）
 ./tests/trigger-smoke.sh        # 事件触发 hook 的置标/防抖/消费生命周期
+./tests/compact-recall-smoke.sh # compact-recall 归档/索引/回顾注入生命周期
 ./evals/run-eval.sh verdicts    # verdict yaml 机械校验（schema v2，v1 兼容告警）
 ```
 
