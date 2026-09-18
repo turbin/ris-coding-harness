@@ -1,7 +1,7 @@
 ---
 name: pm-workers-engineering
 description: A project-agnostic PM-Workers software-engineering skill that coordinates PM, Coder, and Reviewer roles, uses TDD and adversarial review, and progressively loads project-specific engineering rules from the repository. Use whenever the user asks to develop in PM-Workers mode — e.g. mentions "pm-workers", "PM-Workers 模式", "pm-workers 开发模式", "PM 模式开发", or requests PM/Coder/Reviewer multi-role development, milestone-gated TDD, or adversarial review workflows.
-version: 1.4.0
+version: 1.5.0
 ---
 
 # PM-Workers Engineering Skill
@@ -240,12 +240,33 @@ Each task should contain, at minimum:
 - Acceptance criteria
 - Required tests/evidence
 - Runtime/memory considerations
+- Token/cost budget
 - Reviewer gate
 - Status
 
 The PM should prefer tasks that are independently verifiable and small enough for a meaningful review.
 
 When the repository provides `progress/`, write/resume task state there according to project rules. Otherwise use the repository's native tracking mechanism.
+
+## Token/cost budget
+
+Every task carries a budget for its implementation session:
+
+- `tokens` (required) — upper bound on the total tokens consumed by the
+  session that implements the task (input including cache reads, output,
+  and reasoning combined).
+- `cost_usd` (optional) — upper bound on session cost, when pricing is known.
+
+Discipline:
+
+- A budget the PM cannot credibly estimate is a signal the task is too
+  large — split it before dispatch, do not pad the number.
+- The budget is a planning bound, not a target; the smallest correct
+  change (§10) remains the goal.
+- In loop operation the actual session usage is measured from the
+  execution trace by the orchestrator (see `skills/rsi-loop/`), never
+  self-reported; the PM should calibrate future budgets against recorded
+  actuals in past round reports.
 
 ---
 

@@ -19,6 +19,9 @@ counters:
   evals: []                 # results files written during the loop
   repair_attempts_total: 0    # cumulative build/test repair attempts
   repair_exhausted_rounds: 0  # rounds where the repair budget was exhausted
+  tokens_total: 0             # cumulative sub-agent session tokens (budget telemetry, §4.8)
+  cost_usd_total: 0           # cumulative session cost when computable
+  budget_exceeded_rounds: 0   # rounds with budget_exceeded: true
 metrics:
   last_pass_rate: null
   baseline_pass_rate: null

@@ -52,6 +52,14 @@ Before accepting, check `issues/` (or the project's native tracker) for records 
 - a milestone must not be accepted while a related issue it was meant to fix remains open, unless the user explicitly accepts the deferral;
 - do not expand scope to unrelated open issues — note them and let the PM triage.
 
+### Cost budget
+- the task declares a token/cost budget (PM decomposition field, SKILL.md §6);
+- actual session usage vs the budget is measured from the execution trace
+  by the loop orchestrator, not self-reported; when a breach is observed,
+  record it as a `scope` finding (estimation/scope discipline) with the
+  measured numbers — a breach is reportable even when the milestone is
+  otherwise acceptable.
+
 ### Build/test evidence gate
 Before accepting, confirm the verdict records BUILD and TEST evidence
 (command, status, pass/fail counts) and that `fix_attempts` is within the

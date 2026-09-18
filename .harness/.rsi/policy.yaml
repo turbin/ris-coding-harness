@@ -1,0 +1,34 @@
+# .harness/.rsi/policy.yaml — rsi-loop policy: protected files, task budget, pricing.
+# L3-adjacent configuration (docs/rsi-design.md §3): edit only with human approval.
+# Referenced by: preflight.md (protected_files), round-protocol.md (budget),
+# SKILL.md §14.1 (task_commit — add that section when its gate is first used).
+
+protected_files:
+  - ".harness/.rsi/**"
+  - ".harness/skills/rsi-loop/**"
+  - "evals/tasks/**"
+  - "evals/run-eval.*"
+  - "docs/rsi-design.md"
+  - "install.sh"
+  - "install.ps1"
+
+# Task cost budget (docs/rsi-design.md §4.8).
+# enforce:
+#   strict — a budget-exceeded round feeds the stop conditions: 2 consecutive
+#            exceeded rounds, or a loop_budget overrun, stop the loop;
+#   record — telemetry only (suggested for observe-only trial runs).
+budget:
+  enforce: strict                # strict | record
+  loop_budget:                   # cumulative cap for the whole loop run; null = off
+    tokens: null
+    cost_usd: null
+
+# $/Mtok rates used only when a trace carries no native cost (e.g. kimi);
+# keyed "default" because kimi traces expose no model id. pi traces are
+# priced natively and ignore this table.
+pricing:
+  default:
+    input: 0.3
+    output: 1.2
+    cache_read: 0.03
+    cache_write: 0.15

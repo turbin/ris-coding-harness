@@ -9,6 +9,12 @@ Reads every `<task-id>-<milestone>.yaml` in the verdicts directory
 and prints the data summary that feeds a retro report (docs/rsi-design.md
 §4.3). Does not modify any file.
 
+With `--rounds-dir` (default `progress/loop`), loop round reports are also
+aggregated for budget telemetry (§4.8): per-task budget vs actual
+tokens/cost, overruns, and cumulative totals. Round reports without budget
+fields (pre-§4.8 rounds) are reported as unmetered, not errors; YAML parse
+errors fail loud like verdict errors.
+
 Validation (P4, retro-2026-08-29): every verdict file is parsed and
 schema-checked BEFORE aggregation. Any YAML parse error or schema violation
 is reported with file name and location; aggregation is aborted (exit 2)
@@ -157,15 +163,94 @@ def origin_stats(verdicts, origin):
     return (len(sub), accepted, no_red)
 
 
+def load_rounds(path):
+    """Load loop round reports for budget telemetry; fail loud on parse errors."""
+    if not os.path.isdir(path):
+        return None
+    files = sorted(glob.glob(os.path.join(path, "round-*.yaml")))
+    if not files:
+        return None
+    rounds, errors = [], []
+    for f in files:
+        fname = os.path.basename(f)
+        try:
+            with open(f, encoding="utf-8") as fh:
+                doc = yaml.safe_load(fh)
+        except yaml.YAMLError as e:
+            mark = getattr(e, "problem_mark", None)
+            loc = (f"line {mark.line + 1}, col {mark.column + 1}" if mark
+                   else "unknown location")
+            errors.append(f"{fname}: YAML parse error at {loc}: {e.problem}")
+            continue
+        if isinstance(doc, dict) and doc.get("task_id"):
+            doc["_file"] = fname
+            rounds.append(doc)
+    if errors:
+        print(f"INVALID ROUND REPORT DATA ({len(errors)} problem(s)):",
+              file=sys.stderr)
+        for e in errors:
+            print(f"  {e}", file=sys.stderr)
+        sys.exit(2)
+    return rounds
+
+
+def report_budget(rounds, rounds_dir):
+    """Print budget telemetry (§4.8) aggregated from loop round reports."""
+    metered, unmetered = [], []
+    for r in rounds:
+        total = r.get("total_tokens")
+        if isinstance(total, int):
+            metered.append(r)
+        else:
+            unmetered.append(r["_file"])
+    if not rounds:
+        return
+    print()
+    print(f"budget telemetry ({rounds_dir}: {len(rounds)} round report(s), "
+          f"{len(metered)} metered):")
+    if metered:
+        print(f"{'task':<38} {'file':<18} {'budget':>9} {'total':>9} "
+              f"{'exceeded':>8} {'cost_usd':>10}")
+        tokens_sum = cost_sum = exceeded = 0
+        for r in metered:
+            budget = r.get("budget") or {}
+            budget_tokens = budget.get("tokens")
+            total = r["total_tokens"]
+            over = r.get("budget_exceeded")
+            over = ("?" if over is None else
+                    "yes" if over else "no")
+            cost = r.get("cost_usd")
+            tokens_sum += total
+            if isinstance(cost, (int, float)):
+                cost_sum += cost
+            if over == "yes":
+                exceeded += 1
+            print(f"{r['task_id']:<38} {r['_file']:<18} "
+                  f"{'?' if budget_tokens is None else budget_tokens:>9} "
+                  f"{total:>9} {over:>8} "
+                  f"{'?' if cost is None else format(cost, '.6f'):>10}")
+        print(f"totals: tokens {tokens_sum}   cost_usd {cost_sum:.6f}   "
+              f"budget_exceeded rounds: {exceeded}")
+    if unmetered:
+        print(f"unmetered rounds (no usage data): {len(unmetered)} "
+              f"({', '.join(unmetered)})")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("verdicts_dir", nargs="?", default="evals/results")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--rounds-dir", default="progress/loop", metavar="DIR",
+                    help="loop round-report dir for budget telemetry "
+                         "(default: progress/loop; pass an empty string to skip)")
     args = ap.parse_args()
 
     verdicts = load_verdicts(args.verdicts_dir)
+    round_reports = load_rounds(args.rounds_dir) if args.rounds_dir else None
     if not verdicts:
         print(f"no verdicts found in {args.verdicts_dir}")
+        if round_reports:
+            report_budget(round_reports, args.rounds_dir)
         return 0
 
     # --- per-task table -------------------------------------------------
@@ -225,6 +310,9 @@ def main():
         n = sum(cat_sev[(cat, s)] for s in SEVERITIES)
         if n >= 2:
             print(f"  {cat}: {n} findings")
+
+    if round_reports:
+        report_budget(round_reports, args.rounds_dir)
     return 0
 
 

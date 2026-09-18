@@ -20,6 +20,8 @@ it never extends the loop.
 | 5 | Human interruption: user sets `pause: true` in `state.yaml`, or the loop is asked to stop | state file, user request |
 | 6 | Queue exhausted with rounds remaining — this is a **normal stop** (not an incident): report and go to human acceptance | queue file |
 | 7 | Any L3 file changed by the loop (defense in depth; should be impossible if pre-commit hook is installed) | `git diff` on the protected path |
+| 8 | Budget breach, `budget.enforce: strict` (§4.8): 2 consecutive rounds with `budget_exceeded: true` | round files carrying `token_usage`/`budget`; `scripts/trace-usage.py` outputs; policy budget section |
+| 9 | Loop budget overrun, `budget.enforce: strict` (§4.8): cumulative `tokens_total` or `cost_usd_total` in `state.yaml` exceeds `budget.loop_budget` in `.harness/.rsi/policy.yaml` | state.yaml counters; policy `budget.loop_budget` |
 
 ## After a stop
 

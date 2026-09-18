@@ -1,7 +1,7 @@
 # RIS Coding Harness — 递归自我改进（RSI）设计
 
-版本：v0.4（Phase 0-5 已实施；L1P 平台层 / 约束冲突门 / 事件触发已实施）
-日期：2026-08-27
+版本：v0.5（Phase 0-5 已实施；L1P 平台层 / 约束冲突门 / 事件触发 / 任务成本预算已实施）
+日期：2026-09-18
 
 ## 1. 背景与目标
 
@@ -259,6 +259,26 @@ skill 结构：
 
 门禁不变：无人值守触发的评估结果在人工终验前属「试运行」；检测到退步时的动作：进入有限修复窗口（同一症结 ≤3 次归因-修复-重跑 eval，不得触碰 protected files），窗口耗尽则 `git revert` 该变异提案、写 incident 报告并停机交人工；除该提案外不自动回滚、不自动改规则。
 
+### 4.8 任务成本预算（token/cost）
+
+动机：无成本约束的任务会让回路「无限烧钱」——预算必须在任务分解时声明、在执行时被度量，成本才能成为与 pass@1 同级的回路指标。
+
+预算语义：
+
+- **计量对象** = 任务的施工子代理会话，即 P6 强制留存的 trace（含同会话内 PM/Reviewer 开销）；编排者自身开销不计。
+- **token 口径** = 会话总 token（input 含缓存读 + output + reasoning）。
+- **cost 口径** = trace 原生 cost（pi）优先；无原生 cost 的 trace（kimi）按 `.harness/.rsi/policy.yaml` 定价表估算；均不可得记 unknown，此时以 tokens 预算为准。
+
+三个执行点：
+
+1. **分解时声明（PM）**：任务字段必含 `Token/Cost Budget`（tokens 必填、cost 可选）；给不出可信预算 = 任务过大信号，先拆分再派单（pm-workers SKILL §6）。
+2. **派单前硬校验（rsi-loop）**：队列条目必含 `budget`；缺预算不派单，列出全部缺失条目并报错停机（preflight 第 5 项 + TAKE 步骤双重校验）。
+3. **轮后遥测与停机（rsi-loop）**：编排者用 `scripts/trace-usage.py` 从 trace 提取实际消耗，写入轮报告（`budget` / `token_usage` / `total_tokens` / `cost_usd` / `cost_source` / `budget_exceeded`）并累计进 state counters；**不让子代理自报**（防造假）。`budget.enforce: strict` 下，连续 2 轮超标或 `loop_budget` 累计超限触发停机条件 #8/#9；`record` 只记录不触发。trace 无 usage 数据记 unknown，轮次仍有效、缺口可见。
+
+聚合：`scripts/retro-aggregate.py --rounds-dir` 输出每任务 budget vs actual、超标清单与累计值，作为 retro 数据摘要的预算段。
+
+非目标：不做施工中途 kill——跨 CLI 实时监控 trace 不可靠（格式各异、token≠字节数），中途熔断留作未来项。
+
 ## 5. 安全与门禁（横切设计）
 
 1. **Protected files**：`install.sh`、`install.ps1`、`evals/tasks/**`、`evals/run-eval.sh`、`docs/rsi-design.md`（本文件）列入保护清单，任何自动变异不得触碰。
@@ -283,6 +303,7 @@ skill 结构：
 | 平均审阅往返轮数 | verdict 聚合 | 下降 |
 | 提案采纳率 | decisions 记录 | 稳定（过高=提案太琐碎，过低=retro 质量差） |
 | 规则回滚率 | git log | 低（高说明变异质量差或 eval 有漏洞） |
+| 平均任务 token/cost、预算超限轮数 | 轮报告 budget telemetry（`retro-aggregate.py --rounds-dir`，§4.8） | 下降 |
 
 ## 7. 分阶段实施路线
 

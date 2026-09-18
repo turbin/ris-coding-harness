@@ -20,6 +20,13 @@ Produce the smallest correct change consistent with the project's discovered eng
 8. Explain why the changes are necessary.
 9. Submit evidence to Reviewer.
 
+## Budget discipline
+
+The task carries a PM-set token/cost budget. Treat it like the repair
+bound: work within it, and when the remaining work clearly cannot fit —
+repair attempts piling up, investigation ballooning, scope doubts — stop
+and escalate per SKILL.md §13 instead of burning through the budget.
+
 ## TDD evidence
 
 RED

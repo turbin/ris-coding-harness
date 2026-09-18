@@ -1,7 +1,7 @@
 ---
 name: rsi-loop
 description: Orchestrates the recursive self-improvement loop (docs/rsi-design.md §4.5): preflight -> run task rounds -> collect verdicts -> retro -> gated mutation -> eval regression -> stop -> human final acceptance. Use when the user asks to run the RSI loop, "跑 N 轮", "observe-only 试跑", or to resume an interrupted loop from progress/loop/state.yaml.
-version: 1.1.0
+version: 1.2.0
 ---
 
 # RSI Loop Skill
@@ -57,6 +57,9 @@ invoke rsi-loop --gate <observe-only|l1-auto|all-manual> --rounds <N>
    `progress/loop/state.yaml.example`).
 3. **Round loop** (repeat up to `--rounds`):
    a. Take the next task from the queue (or stop when the queue is empty).
+      The entry must carry a `budget` (see `references/round-protocol.md`);
+      an unbudgeted task is not dispatched — list the offending entries
+      and stop with an error.
    b. Spawn a cold-start sub-agent for the task: hand it the PM-Workers
       protocol (`.harness/skills/pm-workers-engineering/SKILL.md`), the task
       description, and the gate level. The orchestrator does not work the
@@ -66,9 +69,13 @@ invoke rsi-loop --gate <observe-only|l1-auto|all-manual> --rounds <N>
       is invalid.
    c. Collect the sub-agent's results: structured verdict
       (`evals/results/<task-id>-<milestone>.yaml`), issues, diff stats,
-      trace file.
+      trace file, and the session's token/cost usage extracted from the
+      trace with `scripts/trace-usage.py` (orchestrator-measured, never
+      self-reported; see `references/round-protocol.md` Budget enforcement).
    d. Write `progress/loop/round-<n>.yaml` (see `round.yaml.example`),
-      including `trace_file`.
+      including `trace_file` and the budget fields (`budget`,
+      `token_usage`, `total_tokens`, `cost_usd`, `cost_source`,
+      `budget_exceeded`).
    e. Update `state.yaml` counters and cumulative metrics.
    f. Judge retro triggers (per `docs/rsi-design.md` §4.3: N tasks done /
       ≥3 BLOCKER+MAJOR in one category / eval drop). If triggered, run a

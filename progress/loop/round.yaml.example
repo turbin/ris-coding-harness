@@ -17,6 +17,12 @@ coder_red_green_evidence: true
 repair_attempts: 0           # build/test repair attempts in this round's task
 repair_exhausted: false      # true when the 3-attempt bound was hit
 loc_delta: {added: 12, removed: 3}
+budget: {tokens: 200000, cost_usd: 0.50}   # from the queue entry (required)
+token_usage: {input: 16399, output: 18229, cache_read: 400640, cache_write: 0, reasoning: 11546}
+total_tokens: 435268                        # orchestrator-measured via scripts/trace-usage.py; "unknown" when trace has no usage data
+cost_usd: 0.008522                          # null when not computable
+cost_source: native                         # native | pricing | none
+budget_exceeded: false                      # null when total_tokens is unknown
 trace_file: "traces/round-1-example-task-01.pi.jsonl"   # required (P6)
 mutations: []                # proposal IDs applied this round (observe-only: always [])
 eval_after: null             # "results/eval-<ts>.json (pass@1 x/y)" when re-run

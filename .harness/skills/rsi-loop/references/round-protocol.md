@@ -7,7 +7,11 @@ itself (context isolation; identical guarantees to a shell-per-round model).
 ## Single-round flow
 
 ```
-1. TAKE      pop next task from the queue (progress/loop/tasks.yaml)
+1. TAKE      pop next task from the queue (progress/loop/tasks.yaml).
+             Validate the entry carries a `budget` (schema below): a queue
+             entry without `budget.tokens` is NOT dispatched — list every
+             offending entry and stop with an error (same severity as a
+             missing verdict/trace; fix the queue, never guess budgets).
 2. SPAWN     cold-start sub-agent with:
              - PM-Workers skill path (role protocol)
              - task description (from queue entry)
@@ -32,8 +36,13 @@ itself (context isolation; identical guarantees to a shell-per-round model).
              - issues recorded (issues/ or project tracker)
              - diff stats (changed files, added/removed lines, deps)
              - RED evidence status (verdict field)
+             - session usage: run `python3 scripts/trace-usage.py` on the
+               captured trace (budget telemetry is orchestrator-measured,
+               never sub-agent self-reported; see Budget enforcement)
 4. RECORD    write progress/loop/round-<n>.yaml (see round.yaml.example),
-             including `trace_file` referencing the captured trace
+             including `trace_file` referencing the captured trace and the
+             budget fields (`budget`, `token_usage`, `total_tokens`,
+             `cost_usd`, `cost_source`, `budget_exceeded`)
 5. UPDATE    state.yaml: rounds_done++, counters (accepted/rejected,
              issues by category, eval results), queue position
 6. RETRO?    judge triggers (docs/rsi-design.md §4.3):
@@ -68,6 +77,9 @@ itself (context isolation; identical guarantees to a shell-per-round model).
   description: "evals/tasks/01-off-by-one-pagination/task.md (hand to sub-agent)"
   workdir: "evals/sandbox/01-off-by-one-pagination"
   gate_ok: true          # task may be mutated by the sub-agent
+  budget:                # REQUIRED; a task without a budget is not dispatched
+    tokens: 200000       # total session tokens (input incl. cache + output + reasoning)
+    cost_usd: 0.50       # optional; checked only when both actual cost and budget are known
 ```
 
 ## Verdict contract with the sub-agent
@@ -90,6 +102,24 @@ by `trace_file` in the round report; missing trace = round failed (P6,
 retro-2026-08-29) — verdicts without traces cannot be audited, and real
 project tasks have no machine judge to substitute for the trace.
 
+## Budget enforcement (docs/rsi-design.md §4.8)
+
+Every dispatched task carries a `budget` (queue entry). After each round
+the orchestrator — never the sub-agent — extracts actual session usage
+from the captured trace with `scripts/trace-usage.py` and records it in
+the round report:
+
+- `budget_exceeded: true` when `total_tokens` > `budget.tokens` (or, when
+  both actual and budgeted cost are known, `cost_usd` > `budget.cost_usd`);
+- traces without usable usage data record `total_tokens: unknown` and
+  `budget_exceeded: null` — the round stays valid and the gap stays visible;
+- enforcement follows `budget.enforce` in `.harness/.rsi/policy.yaml`:
+  `strict` feeds the stop conditions (see `stop-conditions.md` #8/#9);
+  `record` keeps telemetry only;
+- cumulative usage accumulates in `state.yaml` counters (`tokens_total`,
+  `cost_usd_total`, `budget_exceeded_rounds`) and feeds retro aggregation
+  (`scripts/retro-aggregate.py --rounds-dir`).
+
 ## Round report (progress/loop/round-<n>.yaml)
 
 ```yaml
@@ -103,6 +133,12 @@ issues: []
 rounds: 1
 coder_red_green_evidence: true
 loc_delta: {added: 12, removed: 3}
+budget: {tokens: 200000, cost_usd: 0.50}   # from the queue entry
+token_usage: {input: 16399, output: 18229, cache_read: 400640, cache_write: 0, reasoning: 11546}
+total_tokens: 435268                        # "unknown" when the trace has no usage data
+cost_usd: 0.008522                          # null when not computable
+cost_source: native                         # native | pricing | none
+budget_exceeded: false                      # null when total_tokens is unknown
 trace_file: "traces/round-1-example-task-01.pi.jsonl"   # required (P6)
 mutations: []            # proposal IDs applied this round (empty in observe-only)
 eval_after: "results/eval-<ts>.json (pass@1 x/y)"   # when eval was re-run
