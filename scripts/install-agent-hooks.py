@@ -12,11 +12,14 @@ for a coding agent, adapted to each agent's hook mechanism:
 
 Usage:
   install-agent-hooks.py <agent> [--target PATH] [--scope project|user]
+  install-agent-hooks.py kimi --check   verify installed state (hosted scripts
+                                        vs repo sources + managed block target)
 
 Idempotent: previously managed entries are replaced; foreign config entries
-are left untouched. Exit codes: 0 installed, 1 error, 2 usage error.
+are left untouched. Exit codes: 0 installed/ok, 1 error/drift, 2 usage error.
 """
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -155,6 +158,59 @@ def install_kimi(root, scope):
     log(f"kimi: hooks registered in {cfg} (scripts hosted in {hooks_dir})")
     log("kimi: run /reload in the TUI (or restart) to activate hook changes")
     log("kimi: next /compact (or auto compaction) will archive into <project>/conversations/")
+
+
+def check_kimi():
+    """Verify installed state instead of installing: hosted scripts must
+    byte-match the repo sources and the managed block must point at the
+    user-level hooks dir. The config scan is scoped to the managed block so
+    foreign hooks that merely mention compact-archive stay out of the report.
+    Exit 0 clean, 1 drift. An installing run silently repairs drift, so this
+    never repairs — it only reports."""
+    home = Path(os.environ.get("KIMI_CODE_HOME") or (Path.home() / ".kimi-code"))
+    hooks_dir = home / "hooks"
+    problems = []
+    for name in KIMI_HOOK_FILES:
+        src, dst = SCRIPT_DIR / name, hooks_dir / name
+        if not src.is_file():
+            problems.append(f"source missing: {src}")
+            continue
+        if not dst.is_file():
+            problems.append(f"hosted copy missing: {dst} (re-run: install-agent-hooks.py kimi)")
+            continue
+        if hashlib.sha256(src.read_bytes()).hexdigest() != hashlib.sha256(dst.read_bytes()).hexdigest():
+            problems.append(f"hosted copy drifted from repo: {dst} (re-run: install-agent-hooks.py kimi)")
+    cfg = home / "config.toml"
+    text = cfg.read_text(encoding="utf-8", errors="replace") if cfg.is_file() else ""
+    block_lines, in_block = [], False
+    for line in text.splitlines():
+        if line.strip() == KIMI_MARK_BEGIN:
+            in_block = True
+            continue
+        if line.strip() == KIMI_MARK_END:
+            in_block = False
+            continue
+        if in_block:
+            block_lines.append(line)
+    if not block_lines:
+        problems.append(f"managed block missing in {cfg}")
+    else:
+        block_text = "\n".join(block_lines)
+        for event in ("PostCompact", "UserPromptSubmit"):
+            if f'event = "{event}"' not in block_text:
+                problems.append(f"managed block missing event {event}")
+        for needle in ("compact-archive", "session-recall"):
+            line = next((l for l in block_lines if needle in l and "command" in l), "")
+            if not line:
+                problems.append(f"managed command missing for {needle}")
+            elif fwd(hooks_dir).lower() not in line.lower():
+                problems.append(f"managed command not hosted in {hooks_dir}: {line.strip()}")
+    if problems:
+        for p in problems:
+            log(f"kimi check: DRIFT {p}")
+        return 1
+    log("kimi check: ok (hosted scripts match repo; managed block points at user-level hooks dir)")
+    return 0
 
 
 # ---------------------------------------------------------------- claude
@@ -299,7 +355,15 @@ def main():
     ap.add_argument("agent", choices=AGENTS)
     ap.add_argument("--target", default=".")
     ap.add_argument("--scope", choices=("project", "user"), default="project")
+    ap.add_argument("--check", action="store_true",
+                    help="verify installed state instead of installing (kimi only)")
     args, _unknown = ap.parse_known_args()
+
+    if args.check:
+        if args.agent == "kimi":
+            return check_kimi()
+        log(f"{args.agent}: --check is not supported yet")
+        return 2
 
     target = Path(args.target).resolve()
     if not target.is_dir():

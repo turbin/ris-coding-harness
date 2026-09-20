@@ -9,3 +9,4 @@ Use this file as a lightweight navigation surface. Keep entries concise and poin
 | 2026-09-19 | 2026-09-19-config-deprecated-loop-key.md | P2：用户全局 config.toml 使用废弃键 max_retries_per_step |
 | 2026-09-19 | 2026-09-19-env-mvn-unknown-guidance.md | P3：env 引导 pom.xml UNKNOWN 未写明补救动作 |
 | 2026-09-19 | 2026-09-19-skill-hook-activation-timing.md | P3：skill/hook 生效时机缺文档 |
+| 2026-09-20 | 2026-09-20-hook-payload-cwd-fallback.md | P1：hook payload 缺 cwd 时回退 os.getcwd()，真实归档写进 System32 |

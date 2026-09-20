@@ -101,8 +101,9 @@ case "$R3" in
   *) bad "no re-injection after index update" ;;
 esac
 
-# 6) claude PostCompact payload (compact_summary delivered inline)
-printf '%s' '{"hook_event_name":"PostCompact","session_id":"sess-claude","session_title":"c","trigger":"manual","compact_summary":"claude 直接携带的摘要。"}' \
+# 6) claude PostCompact payload (compact_summary delivered inline; real claude
+#    payloads carry cwd — see issues/2026-09-20-hook-payload-cwd-fallback)
+printf '%s' '{"hook_event_name":"PostCompact","session_id":"sess-claude","session_title":"c","trigger":"manual","compact_summary":"claude 直接携带的摘要。","cwd":"'"$PROJ"'"}' \
   | ( cd "$PROJ" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/compact-archive.py" --flavor claude >/dev/null 2>&1 )
 if ls "$PROJ/conversations/archive/sess-claude/"*.md >/dev/null 2>&1 && grep -q "claude 直接携带的摘要" "$PROJ"/conversations/archive/sess-claude/*.md; then
   ok "claude payload compact_summary archived"
@@ -180,6 +181,152 @@ for f in compact-archive.sh compact-archive.ps1 compact-archive.py session-recal
   [ -f "$FAKE_HOME/hooks/$f" ] || khooks_ok=0
 done
 [ "$khooks_ok" -eq 1 ] && ok "6 hook scripts copied to KIMI_CODE_HOME/hooks" || bad "hook scripts missing in KIMI_CODE_HOME/hooks"
+
+# 11) PostCompact WITHOUT payload cwd: project must be resolved via
+#     session_index workDir; os.getcwd() fallback is forbidden
+#     (issues/2026-09-20-hook-payload-cwd-fallback). Run from a neutral dir
+#     with no conversations/ so a getcwd fallback can't pass by accident.
+SESSION_ID2="session_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+SESSION_DIR2="$FAKE_HOME/sessions/wd_fake_998877665544/$SESSION_ID2"
+mkdir -p "$SESSION_DIR2/agents/main"
+printf '%s\n' \
+  '{"type":"full_compaction.begin","source":"manual","time":1767398400000}' \
+  '{"type":"context.apply_compaction","summary":"无 cwd payload 用例：workDir 解析回归。"}' \
+  '{"type":"full_compaction.complete","time":1767398401000}' \
+  > "$SESSION_DIR2/agents/main/wire.jsonl"
+printf '%s\n' "{\"sessionId\":\"$SESSION_ID2\",\"sessionDir\":\"$SESSION_DIR2\",\"workDir\":\"$PROJ\"}" \
+  >> "$FAKE_HOME/session_index.jsonl"
+NEUTRAL="$WORK/no-cwd-sandbox"
+mkdir -p "$NEUTRAL"
+OUT="$(printf '%s' "{\"hook_event_name\":\"PostCompact\",\"session_id\":\"$SESSION_ID2\",\"session_title\":\"smoke\"}" \
+  | ( cd "$NEUTRAL" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/compact-archive.py" 2>&1 ) )"
+if [ -f "$PROJ/conversations/archive/$SESSION_ID2/2026-01-03T00-00-00Z.md" ] \
+  && grep -q "workDir 解析回归" "$PROJ/conversations/archive/$SESSION_ID2/2026-01-03T00-00-00Z.md"; then
+  ok "no-cwd archive lands in session_index workDir project"
+else
+  bad "no-cwd archive lost (output: $OUT)"
+fi
+if [ -e "$NEUTRAL/conversations" ]; then
+  bad "archive fell back to os.getcwd() (neutral cwd polluted)"
+else
+  ok "archive has no os.getcwd() fallback"
+fi
+grep -q "archive/$SESSION_ID2/2026-01-03T00-00-00Z.md" \
+  "$PROJ/conversations/.state/archive-log.jsonl" 2>/dev/null \
+  && ok "archive receipt appended" \
+  || bad "archive receipt missing"
+
+# 12) UserPromptSubmit WITHOUT payload cwd: recall still briefs via workDir
+R5="$(printf '%s' "{\"hook_event_name\":\"UserPromptSubmit\",\"session_id\":\"$SESSION_ID2\"}" \
+  | ( cd "$NEUTRAL" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/session-recall.py" 2>/dev/null ) )"
+case "$R5" in
+  *对话归档简报*) ok "no-cwd recall briefs via session_index workDir" ;;
+  *) bad "no-cwd recall silent (got: ${R5:0:60})" ;;
+esac
+
+# 13) payload cwd bogus + session_index workDir -> workDir wins, bogus untouched
+BOGUS="$WORK/bogus-cwd"
+mkdir -p "$BOGUS"
+OUT="$(printf '%s' "{\"hook_event_name\":\"PostCompact\",\"session_id\":\"$SESSION_ID2\",\"session_title\":\"smoke\",\"cwd\":\"$BOGUS/does-not-exist\"}" \
+  | ( cd "$NEUTRAL" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/compact-archive.py" 2>&1 ) )"
+if [ -f "$PROJ/conversations/archive/$SESSION_ID2/2026-01-03T00-00-00Z.md" ]; then
+  ok "bogus payload cwd falls through to session_index workDir"
+else
+  bad "bogus cwd broke resolution (output: $OUT)"
+fi
+[ ! -e "$BOGUS/conversations" ] && ok "bogus cwd never written" \
+  || bad "archive wrote under bogus cwd"
+
+# 14) unresolvable (unknown session, no cwd) -> fail-open, refuse getcwd, write nothing
+OUT="$(printf '%s' '{"hook_event_name":"PostCompact","session_id":"sess-unknown-xyz","session_title":"c","compact_summary":"孤儿会话摘要。"}' \
+  | ( cd "$NEUTRAL" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/compact-archive.py" 2>&1 ) )"
+rc=$?
+if [ "$rc" -eq 0 ] && [ ! -e "$NEUTRAL/conversations" ]; then
+  ok "unresolvable project fail-opens without writing"
+else
+  bad "unresolvable project misbehaved (rc=$rc, output: $OUT)"
+fi
+
+# 15) relative workDir in session_index -> resolved against KIMI_CODE_HOME
+SESSION_ID3="session_77777777-8888-9999-aaaa-bbbbbbbbbbbb"
+SESSION_DIR3="$FAKE_HOME/sessions/wd_fake_121212121212/$SESSION_ID3"
+mkdir -p "$SESSION_DIR3/agents/main"
+printf '%s\n' \
+  '{"type":"full_compaction.begin","source":"manual","time":1767484800000}' \
+  '{"type":"context.apply_compaction","summary":"相对 workDir 解析用例。"}' \
+  '{"type":"full_compaction.complete","time":1767484801000}' \
+  > "$SESSION_DIR3/agents/main/wire.jsonl"
+printf '%s\n' "{\"sessionId\":\"$SESSION_ID3\",\"sessionDir\":\"$SESSION_DIR3\",\"workDir\":\"relative-proj\"}" \
+  >> "$FAKE_HOME/session_index.jsonl"
+mkdir -p "$FAKE_HOME/relative-proj"
+printf '%s' "{\"hook_event_name\":\"PostCompact\",\"session_id\":\"$SESSION_ID3\"}" \
+  | ( cd "$NEUTRAL" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/compact-archive.py" >/dev/null 2>&1 )
+[ -f "$FAKE_HOME/relative-proj/conversations/archive/$SESSION_ID3/2026-01-04T00-00-00Z.md" ] \
+  && ok "relative workDir resolves against KIMI_CODE_HOME" \
+  || bad "relative workDir not resolved"
+
+# 16) title fallback from state.json lastPrompt when payload has no title
+SESSION_ID4="session_55555555-6666-7777-8888-999999999999"
+SESSION_DIR4="$FAKE_HOME/sessions/wd_fake_343434343434/$SESSION_ID4"
+mkdir -p "$SESSION_DIR4/agents/main"
+printf '%s\n' '{"id":"'"$SESSION_ID4"'","cwd":"'"$PROJ"'","title":"策展标题：compact-recall 加固验证","lastPrompt":"验证一下是否产生摘要信息，并成功落盘\n第二行不应出现"}' \
+  > "$SESSION_DIR4/state.json"
+printf '%s\n' \
+  '{"type":"full_compaction.begin","source":"manual","time":1767571200000}' \
+  '{"type":"context.apply_compaction","summary":"标题回退用例摘要。"}' \
+  '{"type":"full_compaction.complete","time":1767571201000}' \
+  > "$SESSION_DIR4/agents/main/wire.jsonl"
+printf '%s\n' "{\"sessionId\":\"$SESSION_ID4\",\"sessionDir\":\"$SESSION_DIR4\",\"workDir\":\"$PROJ\"}" \
+  >> "$FAKE_HOME/session_index.jsonl"
+printf '%s' "{\"hook_event_name\":\"PostCompact\",\"session_id\":\"$SESSION_ID4\"}" \
+  | ( cd "$NEUTRAL" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/compact-archive.py" >/dev/null 2>&1 )
+if grep -q "session_title: 策展标题：compact-recall 加固验证" \
+  "$PROJ/conversations/archive/$SESSION_ID4/2026-01-05T00-00-00Z.md"; then
+  ok "title prefers state.json title over lastPrompt"
+else
+  bad "title preference missing"
+fi
+
+# 17) kimi --check: clean after install, drift after tampering
+if ( cd "$PROJ" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/install-agent-hooks.py" kimi --check >/dev/null 2>&1 ); then
+  ok "kimi --check clean after install"
+else
+  bad "kimi --check not clean after install"
+fi
+echo "# tampered" >> "$FAKE_HOME/hooks/session-recall.py"
+CHK_RC=0
+CHK_OUT="$( cd "$PROJ" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/install-agent-hooks.py" kimi --check 2>&1 )" || CHK_RC=$?
+if [ "$CHK_RC" -eq 1 ] && grep -q "session-recall.py" <<<"$CHK_OUT"; then
+  ok "kimi --check reports drifted hosted copy (rc=1)"
+else
+  bad "kimi --check missed drift (rc=$CHK_RC, out: ${CHK_OUT:0:80})"
+fi
+
+# 18) --check scan is scoped to the managed block: a foreign command that
+#     merely mentions compact-archive must not trigger DRIFT
+printf '%s\n' '[loop_control]' 'max_attempts_per_step = 3' '' \
+  '[[hooks]]' 'event = "Notification"' \
+  'command = "node \"E:/tools/my-compact-archive-bridge/hook.mjs\""' 'timeout = 30' \
+  > "$FAKE_HOME/config.toml"
+( cd "$PROJ" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/install-agent-hooks.py" kimi --target "$PROJ" >/dev/null 2>&1 )
+FK_RC=0
+FK_OUT="$( cd "$PROJ" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/install-agent-hooks.py" kimi --check 2>&1 )" || FK_RC=$?
+if [ "$FK_RC" -eq 0 ]; then
+  ok "foreign compact-archive command does not trigger DRIFT"
+else
+  bad "foreign needle command false-positives DRIFT (rc=$FK_RC, out: ${FK_OUT:0:100})"
+fi
+
+# 19) relative payload cwd must be rejected (non-absolute = untrusted anchor)
+REL="$NEUTRAL/relative-dir-probe"
+mkdir -p "$REL"
+printf '%s' "{\"hook_event_name\":\"PostCompact\",\"session_id\":\"$SESSION_ID2\",\"session_title\":\"smoke\",\"cwd\":\"relative-dir-probe\"}" \
+  | ( cd "$NEUTRAL" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/compact-archive.py" >/dev/null 2>&1 )
+if [ -f "$PROJ/conversations/archive/$SESSION_ID2/2026-01-03T00-00-00Z.md" ] && [ ! -e "$REL/conversations" ]; then
+  ok "relative payload cwd rejected, session_index workDir used"
+else
+  bad "relative payload cwd accepted as project root (process-cwd anchored write)"
+fi
 
 echo
 echo "passed: $pass  failed: $fail"

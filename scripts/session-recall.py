@@ -45,6 +45,55 @@ def log(msg):
     print(f"[session-recall] {msg}", file=sys.stderr)
 
 
+def kimi_home():
+    override = os.environ.get("KIMI_CODE_HOME")
+    if override:
+        return Path(override)
+    return Path.home() / ".kimi-code"
+
+
+def resolve_cwd(payload, session_id):
+    """Same contract as compact-archive.resolve_cwd: payload cwd ->
+    session_index.jsonl workDir; never os.getcwd() (hooks may run from a
+    service context — issues/2026-09-20-hook-payload-cwd-fallback)."""
+    raw = str(payload.get("cwd") or "").strip()
+    if raw:
+        p = Path(raw)
+        if not p.is_absolute():
+            log(f"ignoring non-absolute payload cwd: {raw}")
+        elif p.is_dir():
+            return p
+        else:
+            log(f"payload cwd is not a directory: {raw}")
+    if session_id:
+        index = kimi_home() / "session_index.jsonl"
+        if index.is_file():
+            workdir = ""
+            try:
+                with index.open("r", encoding="utf-8", errors="replace") as fh:
+                    for line in fh:
+                        if session_id not in line:
+                            continue
+                        try:
+                            rec = json.loads(line)
+                        except ValueError:
+                            continue
+                        if rec.get("sessionId") == session_id:
+                            found = str(rec.get("workDir") or "").strip()
+                            if found:
+                                workdir = found
+            except OSError:
+                pass
+            if workdir:
+                d = Path(workdir)
+                if not d.is_absolute():
+                    d = kimi_home() / d
+                if d.is_dir():
+                    return d
+                log(f"session_index workDir is not a directory: {workdir}")
+    return None
+
+
 def parse_rows(index_path):
     rows = []
     try:
@@ -88,7 +137,10 @@ def main():
         payload = {}
 
     session_id = str(payload.get("session_id") or payload.get("sessionId") or "").strip() or "unknown"
-    cwd = Path(payload.get("cwd") or os.getcwd())
+    cwd = resolve_cwd(payload, session_id)
+    if cwd is None:
+        log("skip: cannot resolve project dir (no payload cwd, no session_index workDir)")
+        return 0
 
     conv = cwd / "conversations"
     index_path = conv / "index.md"

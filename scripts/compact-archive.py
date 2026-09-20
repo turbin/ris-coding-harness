@@ -60,6 +60,49 @@ def kimi_home():
     return Path.home() / ".kimi-code"
 
 
+def resolve_cwd(payload, session_id):
+    """Resolve the project directory without trusting os.getcwd(): hook
+    payloads may lack cwd (observed on kimi 2026-09, contradicting the docs)
+    and the CLI may spawn hooks from a service context (e.g. System32).
+    Chain: payload cwd -> session_index.jsonl workDir. None = unresolvable."""
+    raw = str(payload.get("cwd") or "").strip()
+    if raw:
+        p = Path(raw)
+        if not p.is_absolute():
+            log(f"ignoring non-absolute payload cwd: {raw}")
+        elif p.is_dir():
+            return p
+        else:
+            log(f"payload cwd is not a directory: {raw}")
+    if session_id:
+        index = kimi_home() / "session_index.jsonl"
+        if index.is_file():
+            workdir = ""
+            try:
+                with index.open("r", encoding="utf-8", errors="replace") as fh:
+                    for line in fh:
+                        if session_id not in line:
+                            continue
+                        try:
+                            rec = json.loads(line)
+                        except ValueError:
+                            continue
+                        if rec.get("sessionId") == session_id:
+                            found = str(rec.get("workDir") or "").strip()
+                            if found:
+                                workdir = found
+            except OSError:
+                pass
+            if workdir:
+                d = Path(workdir)
+                if not d.is_absolute():
+                    d = kimi_home() / d
+                if d.is_dir():
+                    return d
+                log(f"session_index workDir is not a directory: {workdir}")
+    return None
+
+
 def find_wire(home, session_id):
     """Resolve the session's main-agent wire.jsonl. Primary source is
     session_index.jsonl; fall back to a directory glob."""
@@ -129,6 +172,23 @@ def extract_compaction(wire):
         "source": source,
         "time": begin_time,
     }
+
+
+def extract_title(wire):
+    """Fallback session title when the payload lacks one: first line of the
+    session state.json lastPrompt, whitespace-collapsed, capped at 100 chars."""
+    state = wire.parent.parent.parent / "state.json"
+    try:
+        data = json.loads(state.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return ""
+    curated = str(data.get("title") or "").strip()
+    if curated:
+        return re.sub(r"\s+", " ", curated)[:100]
+    first = str(data.get("lastPrompt") or "").strip().splitlines()
+    if not first or not first[0].strip():
+        return ""
+    return re.sub(r"\s+", " ", first[0].strip())[:100]
 
 
 def _claude_content_text(content):
@@ -281,16 +341,18 @@ def main():
         payload = {}
 
     session_id = first_present(payload, ("session_id", "sessionId"))
-    cwd = Path(payload.get("cwd") or os.getcwd())
+    cwd = resolve_cwd(payload, session_id)
+    if cwd is None:
+        return fail_open(
+            "cannot resolve project dir (no payload cwd, no session_index "
+            "workDir); refusing os.getcwd() fallback"
+        )
     title = first_present(payload, ("session_title", "sessionTitle"))
     summary = first_present(
         payload, ("summary", "compaction_summary", "compact_summary")
     )
     source = first_present(payload, ("source", "trigger", "reason"))
     time_iso = parse_time(first_present(payload, ("compact_time", "timestamp", "pi_timestamp")))
-
-    if not cwd.is_dir():
-        return fail_open(f"cwd not found: {cwd}")
 
     wire_ref = ""
     if not summary:
@@ -304,6 +366,8 @@ def main():
         if not summary and session_id and args.flavor in ("auto", "kimi"):
             wire = find_wire(kimi_home(), session_id)
             if wire:
+                if not title:
+                    title = extract_title(wire)
                 info = extract_compaction(wire)
                 if info:
                     summary = info["summary"]
@@ -348,6 +412,19 @@ def main():
 
     rel = archive_path.relative_to(conv).as_posix()
     changed = update_index(conv / "index.md", time_iso, rel, make_gist(summary))
+    try:
+        state_dir = conv / ".state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        receipt = {
+            "archived_at": now_iso(),
+            "compact_time": time_iso,
+            "session": session_id or "unknown",
+            "file": f"conversations/{rel}",
+        }
+        with (state_dir / "archive-log.jsonl").open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(receipt, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        log(f"cannot append archive receipt: {exc}")
     log(f"archived -> conversations/{rel} (index {'updated' if changed else 'unchanged'})")
     return 0
 
