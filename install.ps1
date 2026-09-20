@@ -59,6 +59,7 @@ param(
   [switch]$StrictEnv,
   [string[]]$Agent = @(),
   [string]$Scope = "project",
+  [string]$Search = "zvec",
   [switch]$Help,
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$RemainingArgs = @()
@@ -96,6 +97,10 @@ Options:
                          -Agent parameters cannot bind in PowerShell.
   -Scope project|user    Resolve agent directories under the target project
                          or the user home (default: project)
+  -Search zvec|off       Workspace search routing (default: zvec). zvec injects
+                         the search-routing section into AGENTS.md and
+                         provisions the zg CLI (npm -g @zvec/zvec-grep) when
+                         missing; off skips both
   -Help                  Show this help
 
 Modes:
@@ -121,6 +126,10 @@ if (@("auto", "init", "adopt") -notcontains $Mode) {
 }
 if (@("project", "user") -notcontains $Scope) {
   [Console]::Error.WriteLine("Invalid scope: $Scope")
+  exit 2
+}
+if (@("zvec", "off") -notcontains $Search) {
+  [Console]::Error.WriteLine("Invalid search: $Search (want zvec|off)")
   exit 2
 }
 if ($RemainingArgs.Count -gt 0) {
@@ -262,6 +271,20 @@ outside the markers.
 
   function Build-AgentsSection {
     $repair = ((Show-RepairHint | Out-String).Trim()) -replace "^Repair: ", ""
+    $searchSection = ""
+    if ($Search -eq "zvec") {
+      $searchSection = @'
+**Search routing (zvec is the default fuzzy-search layer)**
+
+- Fuzzy/semantic lookups for code or evidence: `zg query --human "<question>"`.
+  On first use run `zg status`, then `zg index` if missing (storage lives in
+  `.zvec-grep/`, git-ignored); refresh with `zg index` after large changes.
+- Exact string/symbol lookups: native Grep/Glob (or `zg query --rg`).
+- Structure, relationships, architecture: `graphify` when `graphify-out/`
+  exists; call graphs and blast radius: CodeGraph (`.codegraph/`).
+- Verify retrieved evidence with native tools before editing.
+'@
+    }
     @"
 $($script:BeginMark)
 ## Harness routing (managed by ris-coding-harness - do not edit between the markers)
@@ -277,6 +300,7 @@ $($script:BeginMark)
 - `decisions/`, `issues/`, `progress/` hold project records - use each `index.md` before reading many child files.
 - `evals/results/` receives structured reviewer verdicts.
 
+$searchSection
 **Harness mechanism boundary**
 
 - `.harness/` holds everything the installer manages: skills, gate policy, manifest, reports. Do not hand-edit; re-run the installer to repair.
@@ -651,6 +675,9 @@ __pycache__/
 *.py[cod]
 .cache/
 
+# zvec (zg) local search index
+.zvec-grep/
+
 # Environment / secrets
 .env
 .env.*
@@ -739,8 +766,14 @@ Thumbs.db
         $exe = $Cmd[0]
         $argList = @()
         if ($Cmd.Count -gt 1) { $argList = $Cmd[1..($Cmd.Count - 1)] }
+        # Env bootstrap is warn-by-default: a native command writing to stderr
+        # must not become terminating. PS 5.1 raises NativeCommandError for
+        # native stderr even under redirection when EAP is Stop.
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
         & $exe @argList *> $null
         $rc = $LASTEXITCODE
+        $ErrorActionPreference = $prevEap
       }
       finally {
         Pop-Location
@@ -860,6 +893,74 @@ Thumbs.db
       }
       if ($script:EnvAnyManifest -eq $false) {
         Invoke-EnvNote "no dependency manifests detected (package.json / requirements.txt / go.mod etc.)"
+      }
+    }
+
+    # Workspace search provisioning (zvec/zg) - on by default via -Search zvec.
+    # The CLI is installed when missing (npm channel); the index itself is
+    # deferred to the first fuzzy search per the AGENTS.md search routing.
+    if ($Search -eq "zvec") {
+      # Windows reality: npm shims differ per shell and a sh wrapper on PATH is
+      # not PS-executable, so probe PS-native executables first, then Git Bash,
+      # and only fall back to npm provisioning when both fail.
+      $zgOk = $false
+      $zgVer = ""
+      $zgVia = ""
+      foreach ($name in @("zg.cmd", "zg.exe")) {
+        if ($zgOk) { break }
+        $c = Get-Command $name -ErrorAction SilentlyContinue
+        if ($c) {
+          $prevEap = $ErrorActionPreference
+          $ErrorActionPreference = "Continue"
+          try {
+            # Capture fully, then select: Select-Object -First 1 in-pipeline
+            # terminates the native command and corrupts $LASTEXITCODE.
+            $zgOut = & $c.Source version 2>$null
+            if ($LASTEXITCODE -eq 0 -and $zgOut) { $zgOk = $true; $zgVer = [string]($zgOut | Select-Object -First 1); $zgVia = $c.Source }
+          } catch { $zgOk = $false } finally { $ErrorActionPreference = $prevEap }
+        }
+      }
+      if (-not $zgOk) {
+        $bashCmd = Get-Command bash -ErrorAction SilentlyContinue
+        if ($bashCmd) {
+          $prevEap = $ErrorActionPreference
+          $ErrorActionPreference = "Continue"
+          try {
+            # -i so .bashrc (which typically adds ~/.local/bin to PATH) loads;
+            # job-control warnings go to stderr and are discarded here.
+            $zgOut = & bash -lic "zg version 2>/dev/null" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $zgOut) { $zgOk = $true; $zgVer = [string]($zgOut | Select-Object -First 1); $zgVia = "Git Bash" }
+          } catch { $zgOk = $false } finally { $ErrorActionPreference = $prevEap }
+        }
+      }
+      if ($zgOk) {
+        $via = if ($zgVia) { " via $zgVia" } else { "" }
+        Invoke-EnvNote "zvec (zg $zgVer$via) available; index builds on first fuzzy search (see AGENTS.md search routing)"
+      }
+      elseif (Get-Command npm -ErrorAction SilentlyContinue) {
+        # cmd /c keeps npm's noisy stderr (deprecation warnings) out of the
+        # PowerShell stream machinery (PS 5.1 turns it into NativeCommandError).
+        Invoke-EnvCommand "zvec install (npm -g @zvec/zvec-grep)" @("cmd", "/c", "npm", "install", "-g", "@zvec/zvec-grep")
+        # Recheck by EXECUTION, not mere presence: an interrupted install can
+        # leave a shim on PATH that cannot run (seen 2026-09-20).
+        $zgRecheck = $false
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+          $null = (zg version 2>$null | Select-Object -First 1)
+          if ($LASTEXITCODE -eq 0) { $zgRecheck = $true }
+        }
+        catch { $zgRecheck = $false }
+        finally { $ErrorActionPreference = $prevEap }
+        if ($zgRecheck) {
+          Invoke-EnvNote "zvec installed; index builds on first fuzzy search (see AGENTS.md search routing)"
+        }
+        else {
+          Invoke-EnvUnknown "zvec install ran but zg is still not executable; check the npm global bin directory"
+        }
+      }
+      else {
+        Invoke-EnvUnknown "zvec (zg) not found and npm unavailable; install @zvec/zvec-grep to enable the default fuzzy-search layer"
       }
     }
 

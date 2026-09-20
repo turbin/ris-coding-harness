@@ -9,3 +9,4 @@ RSI 闭环 MUTATE 环节（`docs/rsi-design.md` §4.4）的审计轨迹：
 - `2026-08-28-P3.md` — L1 testing.md：边界输入清单先行
 - `2026-08-29-eval-expansion.md` — L3 资产新增：eval 任务集 10 → 20
 - `2026-09-18-task-cost-budget.md` — L2+L3：任务级 token/费用预算（PM 声明 + loop 强制）
+- `2026-09-20-zvec-search-routing.md` — L3 资产新增：zvec 检索路由分工 + 安装器 `--search` 初始化选项

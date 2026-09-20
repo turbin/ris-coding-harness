@@ -73,6 +73,8 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -Target . -Mode adopt
 --agent LIST           额外分发 Skill 到指定 agent 目录（逗号分隔，可重复；支持 all；
                        PowerShell 侧 -Agent 不支持重复传参，用逗号分隔或数组）
 --scope project|user   agent 目录的作用域：工程内 / 用户主目录（默认 project）
+--search zvec|off      工程检索路由（默认 zvec）：zvec 向 AGENTS.md 注入检索分工段，
+                       并在 zg CLI 缺失时经 npm 安装 @zvec/zvec-grep；off 两者都跳过
 -h, --help             查看完整帮助
 ```
 
@@ -82,7 +84,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -Target . -Mode adopt
 |---|---|
 | 0 | 安装成功（env 阶段失败默认不改变退出码） |
 | 1 | `--check` 检测到 skill 缺失/不完整 |
-| 2 | 用法错误（未知选项、缺参数值、非法 `--mode`/`--scope`、`--check` 与 `--no-skill` 同用） |
+| 2 | 用法错误（未知选项、缺参数值、非法 `--mode`/`--scope`/`--search`、`--check` 与 `--no-skill` 同用） |
 | 3 | `--strict-env` 下环境依赖构建失败 |
 
 注：PowerShell 参数绑定错误（如 `-Target` 缺值）由运行时产生，退出码为 1，属已知偏差；其余用法错误两侧均为 2。
@@ -145,6 +147,16 @@ Skill 目录不完整（如 `SKILL.md` 被删）时，直接重跑安装器即�
 5. **安全边界**：默认失败仅告警不阻断（`--strict-env` 升级为退出码 3）；`--dry-run-env` 只打印不执行；bash 侧命令带 10 分钟超时（无 `timeout` 命令的平台不限制）；不重试、不回滚已写文件。
 
 `--check` 模式完全不执行 env 阶段（零写入承诺不变）。
+
+### 检索路由与 zvec 集成（`--search`，默认 zvec）
+
+初始化的 `AGENTS.md` 受管段内置检索分工（decision: `decisions/2026-09-20-zvec-search-routing.md`）：
+
+- **模糊/语义找代码与证据** → `zg query --human`（zvec，npm 包 `@zvec/zvec-grep`）：env 阶段检测 `zg`，缺失且有 npm 时自动 `npm install -g @zvec/zvec-grep`；索引**不**在安装期构建，按路由约定在首次模糊搜索时 `zg index`（存储 `.zvec-grep/`，已进 .gitignore 模板），避免 init 触发模型下载等重活；
+- **精确字符串/符号** → 原生 Grep/Glob（或 `zg query --rg`）；
+- **结构/关系/架构** → graphify（`graphify-out/` 存在时）；调用链/影响面 → CodeGraph。
+
+`--search off` 跳过路由注入与 env 阶段的 zvec 探测/安装，生成内容与旧版一致。本机 workspace 层的分工约定见 `E:\workspace\AGENTS.md` 的 Search routing 节。
 
 ### run-loop headless 支持矩阵
 
@@ -318,7 +330,8 @@ python scripts/install-agent-hooks.py pi --target . --scope project
 - **数据**：`conversations/archive/<session_id>/<compact_time>.md`（摘要原文，front matter 含 session id、标题、cwd、时间、manual/auto 来源）；`conversations/index.md` 为倒序索引表（越新越可信）；`conversations/.state/` 为本地 marker（已 gitignore）。
 - **幂等**：重复执行只替换受管块/受管组，不动其他配置；卸载＝删除对应配置里的受管段（kimi 标记块、claude/codex 含 compact-archive/session-recall 的组、pi/opencode 的 adapter 文件）。
 - **生效时机**：hook 配置变更在 TUI 里 `/reload` 立即生效（或下次启动自动加载）；工程级 skill 由**新会话**加载，已开启的会话不可见。
-- **机制**：压缩归档 fail-open（失败不影响压缩）；回顾注入每 session 一次、索引更新后重发。归档只读 agent 会话数据。kimi 以外 agent 的摘要来源：claude 取 payload `compact_summary`，codex 取 transcript `type:"compacted"` 行，pi/opencode 由 TS 适配器从事件/会话中取后喂同一契约。
+- **机制**：压缩归档 fail-open（失败不影响压缩）；回顾注入每 session 一次、索引更新后重发。归档只读 agent 会话数据。工程目录解析顺序为 payload `cwd`（**须为绝对路径**）→ `session_index.jsonl` 的 `workDir`，**不回退 `os.getcwd()`**（hook 可能由服务进程拉起、cwd 不可信，见 `issues/2026-09-20-hook-payload-cwd-fallback.md`）；每次归档动作在 `conversations/.state/archive-log.jsonl` 追加回执（事件日志语义：去重重跑亦追加，一行一次动作）；payload 缺 `session_title` 时优先取会话 `state.json` 的 `title`、再回退 `lastPrompt` 首行（仅 kimi wire 流可查会话目录；claude/codex 内联摘要保持空标题）。kimi 以外 agent 的摘要来源：claude 取 payload `compact_summary`，codex 取 transcript `type:"compacted"` 行，pi/opencode 由 TS 适配器从事件/会话中取后喂同一契约。
+- **自检**：`python scripts/install-agent-hooks.py kimi --check` 校验寄宿脚本与仓库源逐字节一致、受管块指向用户级 hooks 目录（漂移 exit 1，只报告不修复——安装本身才是修复动作）。
 - **使用注意**：codex 需在 CLI 里 `/hooks` 审核信任一次；pi 工程级 extension 需要项目信任（交互批准，或 headless 用 `--approve` / `defaultProjectTrust: always`）；claude 的 hook 在 Windows 上默认 Git Bash 执行。pi/opencode 适配器依赖 python（`python`/`python3`/`py`）在 PATH。
 - **模型侧约定**：根 `AGENTS.md` 内置回顾路由——先读 `conversations/index.md` 选条目，再读归档原文；引用注明时间与 session id，旧摘要以仓库现状核实。
 - **隐私**：摘要可能含代码片段与文件路径，属本地工程数据；提交/分享前请自查 `conversations/archive/` 内容。

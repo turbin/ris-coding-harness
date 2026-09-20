@@ -132,6 +132,26 @@ try {
   # .gitignore template parity: Thumbs.db present.
   Assert-True ((Get-Content (Join-Path $New ".gitignore") -Raw) -match "Thumbs\.db") "gitignore Thumbs.db"
 
+  # Search routing (default -Search zvec): AGENTS section carries the routing
+  # block; env report mentions zvec; no eager index is built at install time.
+  Assert-True ((Get-Content (Join-Path $New "AGENTS.md") -Raw) -match "zvec is the default fuzzy-search layer") "agents search routing"
+  Assert-True ((Get-Content (Join-Path $New ".harness/reports/env-report.md") -Raw) -match "zvec") "env report mentions zvec"
+  Assert-True (-not (Test-Path (Join-Path $New ".zvec-grep"))) "no eager zvec index at install time"
+  Assert-True ((Get-Content (Join-Path $New ".gitignore") -Raw) -match "\.zvec-grep/") "gitignore zvec store"
+
+  # -Search off: managed section and env report stay zvec-free.
+  $SearchOff = Join-Path $Tmp "searchoff"
+  & (Join-Path $Root "install.ps1") -Target $SearchOff -Mode adopt -NoGit -Search off | Out-Null
+  Assert-True ($LASTEXITCODE -eq 0) "-Search off installs"
+  $offAgents = Get-Content (Join-Path $SearchOff "AGENTS.md") -Raw
+  Assert-True ($offAgents -match "ris-coding-harness:begin") "off case keeps managed section"
+  Assert-True ($offAgents -notmatch "zvec") "-Search off omits routing"
+  Assert-True ((Get-Content (Join-Path $SearchOff ".harness/reports/env-report.md") -Raw) -notmatch "zvec") "-Search off skips zvec env stage"
+
+  # Invalid -Search value exits 2.
+  & (Join-Path $Root "install.ps1") -Target (Join-Path $Tmp "sbad") -Mode adopt -NoGit -Search bogus 2>&1 | Out-Null
+  Assert-True ($LASTEXITCODE -eq 2) "-Search bogus must exit 2"
+
   # Env bootstrap: fresh install without manifests records an ok report.
   Assert-True ((Get-Content (Join-Path $New ".harness/reports/env-report.md") -Raw) -match "result: ok") "env report ok after fresh install"
 

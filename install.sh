@@ -14,6 +14,7 @@ DRY_RUN_ENV=0
 STRICT_ENV=0
 AGENTS_LIST=""
 SCOPE="project"
+SEARCH="zvec"
 INSTALLED_FILES=""
 BEGIN_MARK='<!-- ris-coding-harness:begin -->'
 END_MARK='<!-- ris-coding-harness:end -->'
@@ -41,6 +42,10 @@ Options:
                          repeatable): claude, pi, kimi, kimi-code, opencode,
                          codex, agents, all
   --scope project|user   Skill install scope (default: project)
+  --search zvec|off      Workspace search routing (default: zvec). zvec injects
+                         the search-routing section into AGENTS.md and
+                         provisions the zg CLI (npm -g @zvec/zvec-grep) when
+                         missing; off skips both
   -h, --help             Show this help
 
 Modes:
@@ -80,6 +85,7 @@ while [ "$#" -gt 0 ]; do
     --strict-env) STRICT_ENV=1; shift ;;
     --agent) require_value "$1" "${2:-}"; AGENTS_LIST="${AGENTS_LIST:+$AGENTS_LIST,}$2"; shift 2 ;;
     --scope) require_value "$1" "${2:-}"; SCOPE="$2"; shift 2 ;;
+    --search) require_value "$1" "${2:-}"; SEARCH="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -87,6 +93,7 @@ done
 
 case "$MODE" in auto|init|adopt) ;; *) echo "Invalid mode: $MODE" >&2; exit 2 ;; esac
 case "$SCOPE" in project|user) ;; *) echo "Invalid scope: $SCOPE" >&2; exit 2 ;; esac
+case "$SEARCH" in zvec|off) ;; *) echo "Invalid search: $SEARCH (want zvec|off)" >&2; exit 2 ;; esac
 
 if [ "$CHECK" -eq 1 ] && [ "$INSTALL_SKILL" -eq 0 ]; then
   echo "--check and --no-skill are mutually exclusive" >&2
@@ -269,7 +276,21 @@ build_agents_section() {
   # s|…|…| replacement — splice it in by line via awk instead of sed.
   hint_tmp="$(mktemp)"
   print_repair_hint | sed 's/^Repair: //' > "$hint_tmp"
-  sed -e "s|@BEGIN@|$BEGIN_MARK|" -e "s|@END@|$END_MARK|" <<'SECTION' | awk -v hint="$hint_tmp" '$0 == "@REPAIR@" { while ((getline line < hint) > 0) print line; close(hint); next } { print }'
+  srch_tmp="$(mktemp)"
+  if [ "${SEARCH:-zvec}" = "zvec" ]; then
+    cat > "$srch_tmp" <<'ROUTING'
+**Search routing (zvec is the default fuzzy-search layer)**
+
+- Fuzzy/semantic lookups for code or evidence: `zg query --human "<question>"`.
+  On first use run `zg status`, then `zg index` if missing (storage lives in
+  `.zvec-grep/`, git-ignored); refresh with `zg index` after large changes.
+- Exact string/symbol lookups: native Grep/Glob (or `zg query --rg`).
+- Structure, relationships, architecture: `graphify` when `graphify-out/`
+  exists; call graphs and blast radius: CodeGraph (`.codegraph/`).
+- Verify retrieved evidence with native tools before editing.
+ROUTING
+  fi
+  sed -e "s|@BEGIN@|$BEGIN_MARK|" -e "s|@END@|$END_MARK|" <<'SECTION' | awk -v hint="$hint_tmp" -v search="${SEARCH:-zvec}" -v srchf="$srch_tmp" '$0 == "@REPAIR@" { while ((getline line < hint) > 0) print line; close(hint); next } $0 == "@SEARCH@" { if (search == "zvec") { while ((getline line < srchf) > 0) print line; close(srchf) } next } { print }'
 @BEGIN@
 ## Harness routing (managed by ris-coding-harness — do not edit between the markers)
 
@@ -284,6 +305,8 @@ build_agents_section() {
 - `decisions/`, `issues/`, `progress/` hold project records — use each `index.md` before reading many child files.
 - `evals/results/` receives structured reviewer verdicts.
 
+@SEARCH@
+
 **Harness mechanism boundary**
 
 - `.harness/` holds everything the installer manages: skills, gate policy, manifest, reports. Do not hand-edit; re-run the installer to repair.
@@ -296,7 +319,7 @@ If a required `SKILL.md` is missing or incomplete, re-run the installer — it o
 @REPAIR@
 @END@
 SECTION
-  rm -f "$hint_tmp"
+  rm -f "$hint_tmp" "$srch_tmp"
 }
 
 build_claude_section() {
@@ -648,6 +671,9 @@ __pycache__/
 *.py[cod]
 .cache/
 
+# zvec (zg) local search index
+.zvec-grep/
+
 # Environment / secrets
 .env
 .env.*
@@ -837,6 +863,25 @@ else
     fi
     if [ "$env_any_manifest" -eq 0 ]; then
       env_note "no dependency manifests detected (package.json / requirements.txt / go.mod etc.)"
+    fi
+  fi
+
+  # Workspace search provisioning (zvec/zg) — on by default via --search zvec.
+  # The CLI is installed when missing (npm channel); the index itself is
+  # deferred to the first fuzzy search per the AGENTS.md search routing.
+  if [ "$SEARCH" = "zvec" ]; then
+    if command -v zg >/dev/null 2>&1; then
+      zg_ver="$(zg version 2>/dev/null | head -n 1 || true)"
+      env_note "zvec (zg ${zg_ver:-unknown}) available; index builds on first fuzzy search (see AGENTS.md search routing)"
+    elif command -v npm >/dev/null 2>&1; then
+      env_run "zvec install (npm -g @zvec/zvec-grep)" npm install -g "@zvec/zvec-grep"
+      if command -v zg >/dev/null 2>&1; then
+        env_note "zvec installed; index builds on first fuzzy search (see AGENTS.md search routing)"
+      else
+        env_unknown "zvec install ran but zg is still not on PATH; check the npm global bin directory"
+      fi
+    else
+      env_unknown "zvec (zg) not found and npm unavailable; install @zvec/zvec-grep to enable the default fuzzy-search layer"
     fi
   fi
 

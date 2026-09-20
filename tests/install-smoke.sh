@@ -29,6 +29,10 @@ grep -q '"schema_version"' "$TMP/new/.harness/manifest.json"
 grep -q '"sha256"' "$TMP/new/.harness/manifest.json"
 test -d "$TMP/new/evals/results"
 
+# Search routing (default --search zvec): managed AGENTS section carries the
+# zvec-first fuzzy-search routing block.
+grep -q 'zvec is the default fuzzy-search layer' "$TMP/new/AGENTS.md"
+
 # Existing project should be adopted without canonical source/test directories.
 test -f "$TMP/existing/AGENTS.md"
 test -f "$TMP/existing/docs/engineering/index.md"
@@ -163,6 +167,33 @@ grep -q 'result: ok' "$TMP/new/.harness/reports/env-report.md" || {
 }
 # .gitignore template parity: Thumbs.db present.
 grep -q 'Thumbs.db' "$TMP/new/.gitignore"
+# .gitignore template ignores the local zvec index store.
+grep -q '.zvec-grep/' "$TMP/new/.gitignore"
+
+# Env bootstrap mentions zvec, and no eager index is built at install time
+# (indexing is deferred to the first fuzzy search per the routing section).
+grep -q 'zvec' "$TMP/new/.harness/reports/env-report.md"
+test ! -e "$TMP/new/.zvec-grep"
+
+# --search off: managed section and env report stay zvec-free.
+mkdir -p "$TMP/searchoff"
+if ! "$ROOT/install.sh" --target "$TMP/searchoff" --mode adopt --no-git --search off >/dev/null; then
+  echo "install smoke test: FAIL (--search off rejected)" >&2
+  exit 1
+fi
+grep -qF '<!-- ris-coding-harness:begin -->' "$TMP/searchoff/AGENTS.md"
+if grep -q 'zvec is the default fuzzy-search layer' "$TMP/searchoff/AGENTS.md"; then
+  echo "install smoke test: FAIL (--search off still injects routing)" >&2
+  exit 1
+fi
+if grep -q 'zvec' "$TMP/searchoff/.harness/reports/env-report.md"; then
+  echo "install smoke test: FAIL (--search off still touches env report)" >&2
+  exit 1
+fi
+
+# Invalid --search value exits 2.
+rc=0; "$ROOT/install.sh" --target "$TMP/sbad" --mode adopt --no-git --search bogus >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || { echo "install smoke test: FAIL (--search bogus exits $rc, want 2)" >&2; exit 1; }
 
 # Legacy layout is reported but does not fail a complete installation.
 mkdir -p "$TMP/new/.agents/skills" "$TMP/new/.rsi"

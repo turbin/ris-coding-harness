@@ -13,3 +13,10 @@ tmp/
 
 # compact-recall per-session recall markers (local state)
 conversations/.state/
+
+# zvec (zg) local search index
+.zvec-grep/
+
+# python bytecode
+__pycache__/
+*.pyc
