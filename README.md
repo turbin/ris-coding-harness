@@ -140,7 +140,7 @@ Skill 目录不完整（如 `SKILL.md` 被删）时，直接重跑安装器即�
 
 1. **约定脚本优先**：发现 `scripts/setup-env.sh`（bash）/ `scripts/setup-env.ps1`（PowerShell）时执行它——harness 只发现和执行，不臆造内容；
 2. **生态探测兜底**：无约定脚本时，按仓库证据探测 `package.json`（npm ci / pnpm / yarn，按锁文件消歧；含 `scripts.build` 时追加构建验证）、`requirements.txt`（仅在 `.venv` 已存在时安装）、`pyproject.toml`（poetry/uv 按锁文件）、`go.mod`、`Cargo.toml`、`pom.xml`、`build.gradle(.kts)`、`CMakeLists.txt`（有 vcpkg/conan 时转人工），并调用对应包管理器只装依赖不构建产物；
-3. **不确定即停**：工具缺失、锁文件歧义、无 venv 等情况记为 UNKNOWN（写入报告，不臆造命令），真正的确认发生在 agent 期 onboarding；
+3. **不确定即停**：工具缺失、锁文件歧义、无 venv 等情况记为 UNKNOWN（写入报告，不臆造命令，也不判安装失败），UNKNOWN 文案附补救动作（如 `mvn` 缺失且无 `mvnw` 时提示「install Maven or add a mvnw wrapper」），真正的确认发生在 agent 期 onboarding；
 4. **报告落账**：全过程（命令、退出码、耗时、UNKNOWN 清单）写入 `.harness/reports/env-report.md`，agent 期复用为证据；
 5. **安全边界**：默认失败仅告警不阻断（`--strict-env` 升级为退出码 3）；`--dry-run-env` 只打印不执行；bash 侧命令带 10 分钟超时（无 `timeout` 命令的平台不限制）；不重试、不回滚已写文件。
 
@@ -302,7 +302,7 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 
 | Agent | 适配机制 | 安装位置（project 作用域） |
 |---|---|---|
-| kimi / kimi-code | `PostCompact` + `UserPromptSubmit` hook | 用户级 `~/.kimi-code/config.toml` 受管块（scope 对该 agent 固定为 user） |
+| kimi / kimi-code | `PostCompact` + `UserPromptSubmit` hook | 用户级 `~/.kimi-code/config.toml` 受管块，hook 脚本寄宿 `~/.kimi-code/hooks/`（scope 对该 agent 固定为 user，不依赖任何工程路径） |
 | claude | `PostCompact`（payload 直带 `compact_summary`）+ `UserPromptSubmit` | `<project>/.claude/settings.json` |
 | codex | `PostCompact`（transcript 提取，async 后台）+ `UserPromptSubmit` | `<project>/.codex/hooks.json` |
 | pi | TypeScript extension（`session_compact` / `before_agent_start`，桥接到同一套 python 脚本） | `<project>/.pi/extensions/compact-recall.ts` |
@@ -317,6 +317,7 @@ python scripts/install-agent-hooks.py pi --target . --scope project
 
 - **数据**：`conversations/archive/<session_id>/<compact_time>.md`（摘要原文，front matter 含 session id、标题、cwd、时间、manual/auto 来源）；`conversations/index.md` 为倒序索引表（越新越可信）；`conversations/.state/` 为本地 marker（已 gitignore）。
 - **幂等**：重复执行只替换受管块/受管组，不动其他配置；卸载＝删除对应配置里的受管段（kimi 标记块、claude/codex 含 compact-archive/session-recall 的组、pi/opencode 的 adapter 文件）。
+- **生效时机**：hook 配置变更在 TUI 里 `/reload` 立即生效（或下次启动自动加载）；工程级 skill 由**新会话**加载，已开启的会话不可见。
 - **机制**：压缩归档 fail-open（失败不影响压缩）；回顾注入每 session 一次、索引更新后重发。归档只读 agent 会话数据。kimi 以外 agent 的摘要来源：claude 取 payload `compact_summary`，codex 取 transcript `type:"compacted"` 行，pi/opencode 由 TS 适配器从事件/会话中取后喂同一契约。
 - **使用注意**：codex 需在 CLI 里 `/hooks` 审核信任一次；pi 工程级 extension 需要项目信任（交互批准，或 headless 用 `--approve` / `defaultProjectTrust: always`）；claude 的 hook 在 Windows 上默认 Git Bash 执行。pi/opencode 适配器依赖 python（`python`/`python3`/`py`）在 PATH。
 - **模型侧约定**：根 `AGENTS.md` 内置回顾路由——先读 `conversations/index.md` 选条目，再读归档原文；引用注明时间与 session id，旧摘要以仓库现状核实。

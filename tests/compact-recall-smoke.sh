@@ -155,6 +155,32 @@ ups = [g for g in h["UserPromptSubmit"] if "session-recall" in g["hooks"][0]["co
 assert len(pc) == 1 and len(ups) == 1, f"managed dup: {len(pc)}/{len(ups)}"
 PY
 
+# 10) kimi installer: hooks hosted under $KIMI_CODE_HOME/hooks (no project
+# path dependency — issues/2026-09-19-kimi-hooks-project-path), idempotent,
+# foreign [[hooks]] entries preserved.
+printf '%s\n' '[loop_control]' 'max_attempts_per_step = 3' '' \
+  '[[hooks]]' 'event = "PostCompact"' \
+  'command = "node \"E:/workspace/some-other/scripts/hook.mjs\""' 'timeout = 30' \
+  > "$FAKE_HOME/config.toml"
+( cd "$PROJ" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/install-agent-hooks.py" kimi --target "$PROJ" >/dev/null 2>&1 )
+( cd "$PROJ" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/install-agent-hooks.py" kimi --target "$PROJ" >/dev/null 2>&1 )
+n="$(grep -c '>>> managed by ris-coding-harness: compact-recall' "$FAKE_HOME/config.toml")"
+[ "$n" -eq 1 ] && ok "kimi managed block unique after re-install" || bad "kimi managed block duplicated (n=$n)"
+grep -q 'some-other/scripts/hook.mjs' "$FAKE_HOME/config.toml" \
+  && ok "kimi foreign hook preserved" || bad "kimi foreign hook lost"
+grep -q 'hooks/compact-archive' "$FAKE_HOME/config.toml" \
+  && ok "kimi command points at user-level hooks dir" || bad "kimi command not hosted in hooks dir"
+if grep -q "$PROJ" "$FAKE_HOME/config.toml"; then
+  bad "kimi config still references a project path"
+else
+  ok "kimi config free of project paths"
+fi
+khooks_ok=1
+for f in compact-archive.sh compact-archive.ps1 compact-archive.py session-recall.sh session-recall.ps1 session-recall.py; do
+  [ -f "$FAKE_HOME/hooks/$f" ] || khooks_ok=0
+done
+[ "$khooks_ok" -eq 1 ] && ok "6 hook scripts copied to KIMI_CODE_HOME/hooks" || bad "hook scripts missing in KIMI_CODE_HOME/hooks"
+
 echo
 echo "passed: $pass  failed: $fail"
 [ "$fail" -eq 0 ]

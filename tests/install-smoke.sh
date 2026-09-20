@@ -195,4 +195,29 @@ test -f "$TMP/migproj/.harness/.rsi/policy.yaml"
 test -f "$TMP/migproj/.rsi/policy.yaml"
 printf '%s\n' "$out" | grep -q 'left in place'
 
+# Regression (issues/2026-09-19-remote-install-sed-pipe): build_agents_section
+# must survive a repair hint containing '|' (the remote curl|bash form).
+# Exercises the real function bodies extracted from install.sh, with a stubbed
+# print_repair_hint; before the fix the sed substitution aborted the install.
+SECT_SRC="$(awk '/^print_repair_hint\(\)/,/^}/' "$ROOT/install.sh"; awk '/^build_agents_section\(\)/,/^}/' "$ROOT/install.sh")"
+if ! out="$(
+  BEGIN_MARK='<!-- ris-coding-harness:begin -->'
+  END_MARK='<!-- ris-coding-harness:end -->'
+  eval "$SECT_SRC"
+  print_repair_hint() { printf '%s\n' 'Repair: curl -fsSL https://raw.githubusercontent.com/turbin/ris-coding-harness/main/install.sh | bash -s -- --target "/tmp/demo" --mode adopt --agent kimi'; }
+  build_agents_section
+)"; then
+  echo "install smoke test: FAIL (build_agents_section broke on a '|' repair hint)" >&2
+  exit 1
+fi
+printf '%s\n' "$out" | grep -q 'bash -s -- --target'
+printf '%s\n' "$out" | grep -qF '<!-- ris-coding-harness:begin -->'
+if printf '%s\n' "$out" | grep -qE '@(REPAIR|BEGIN|END)@'; then
+  echo "install smoke test: FAIL (placeholders left in agents section)" >&2
+  exit 1
+fi
+
+# The local-form repair hint must land in the installed AGENTS.md.
+grep -q -- '--mode adopt' "$TMP/new/AGENTS.md"
+
 echo "install smoke test: PASS"

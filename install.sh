@@ -265,8 +265,11 @@ Only the harness-managed pointer below is required; add your own notes
 outside the markers.'
 
 build_agents_section() {
-  repair_hint="$(print_repair_hint | sed 's/^Repair: //')"
-  sed -e "s|@BEGIN@|$BEGIN_MARK|" -e "s|@END@|$END_MARK|" -e "s|@REPAIR@|${repair_hint}|" <<'SECTION'
+  # The repair hint can contain '|' (remote curl|bash form), which breaks
+  # s|…|…| replacement — splice it in by line via awk instead of sed.
+  hint_tmp="$(mktemp)"
+  print_repair_hint | sed 's/^Repair: //' > "$hint_tmp"
+  sed -e "s|@BEGIN@|$BEGIN_MARK|" -e "s|@END@|$END_MARK|" <<'SECTION' | awk -v hint="$hint_tmp" '$0 == "@REPAIR@" { while ((getline line < hint) > 0) print line; close(hint); next } { print }'
 @BEGIN@
 ## Harness routing (managed by ris-coding-harness — do not edit between the markers)
 
@@ -293,6 +296,7 @@ If a required `SKILL.md` is missing or incomplete, re-run the installer — it o
 @REPAIR@
 @END@
 SECTION
+  rm -f "$hint_tmp"
 }
 
 build_claude_section() {
@@ -808,7 +812,7 @@ else
       elif command -v mvn >/dev/null 2>&1; then
         env_run "maven (mvn)" mvn -B -q -DskipTests dependency:resolve
       else
-        env_unknown "maven not found and no mvnw wrapper; cannot resolve pom.xml dependencies"
+        env_unknown "maven not found and no mvnw wrapper; install Maven or add a mvnw wrapper to resolve pom.xml dependencies"
       fi
     fi
     if [ -f "$TARGET/build.gradle" ] || [ -f "$TARGET/build.gradle.kts" ]; then

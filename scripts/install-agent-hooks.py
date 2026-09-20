@@ -3,7 +3,8 @@
 """Install the compact-recall hooks (PostCompact archive + recall briefing)
 for a coding agent, adapted to each agent's hook mechanism:
 
-  kimi     user-level ~/.kimi-code/config.toml [[hooks]] managed block
+  kimi     user-level ~/.kimi-code/config.toml [[hooks]] managed block;
+           hook scripts hosted in ~/.kimi-code/hooks/ (no project path dep)
   claude   .claude/settings.json (project) or ~/.claude/settings.json (user)
   codex    .codex/hooks.json (project) or ~/.codex/hooks.json (user)
   pi       .pi/extensions/compact-recall.ts (or ~/.pi/agent/extensions/)
@@ -18,6 +19,7 @@ are left untouched. Exit codes: 0 installed, 1 error, 2 usage error.
 import argparse
 import json
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -32,6 +34,10 @@ AGENTS = ("kimi", "claude", "codex", "pi", "opencode")
 MANAGED_MARK = "ris-coding-harness compact-recall"
 KIMI_MARK_BEGIN = "# >>> managed by ris-coding-harness: compact-recall"
 KIMI_MARK_END = "# <<< managed by ris-coding-harness: compact-recall"
+KIMI_HOOK_FILES = (
+    "compact-archive.sh", "compact-archive.ps1", "compact-archive.py",
+    "session-recall.sh", "session-recall.ps1", "session-recall.py",
+)
 
 IS_WINDOWS = os.name == "nt"
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -89,16 +95,34 @@ def atomic_write_json(path, data):
 # ---------------------------------------------------------------- kimi
 
 def install_kimi(root, scope):
+    # Hooks are user-global (one config.toml), so the registered commands must
+    # not live inside any single project: host the scripts under
+    # $KIMI_CODE_HOME/hooks/. The scripts resolve the project from the hook
+    # payload cwd, so a user-level copy serves every project.
+    del root, scope
     home = Path(os.environ.get("KIMI_CODE_HOME") or (Path.home() / ".kimi-code"))
     home.mkdir(parents=True, exist_ok=True)
+    hooks_dir = home / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for name in KIMI_HOOK_FILES:
+        src = SCRIPT_DIR / name
+        if not src.is_file():
+            log(f"kimi: warn: missing {src}; re-run the ris-coding-harness installer to refresh hook scripts")
+            continue
+        shutil.copy2(src, hooks_dir / name)
+        copied += 1
+    if copied == 0:
+        log("kimi: error: no hook scripts found next to this installer; nothing registered")
+        return 1
     cfg = home / "config.toml"
     cfg.touch(exist_ok=True)
     if IS_WINDOWS:
-        cmd_archive = f'powershell -NoProfile -ExecutionPolicy Bypass -File "{fwd(root)}/scripts/compact-archive.ps1"'
-        cmd_recall = f'powershell -NoProfile -ExecutionPolicy Bypass -File "{fwd(root)}/scripts/session-recall.ps1"'
+        cmd_archive = f'powershell -NoProfile -ExecutionPolicy Bypass -File "{fwd(hooks_dir)}/compact-archive.ps1"'
+        cmd_recall = f'powershell -NoProfile -ExecutionPolicy Bypass -File "{fwd(hooks_dir)}/session-recall.ps1"'
     else:
-        cmd_archive = f'bash "{root}/scripts/compact-archive.sh"'
-        cmd_recall = f'bash "{root}/scripts/session-recall.sh"'
+        cmd_archive = f'bash "{hooks_dir}/compact-archive.sh"'
+        cmd_recall = f'bash "{hooks_dir}/session-recall.sh"'
     block = [
         KIMI_MARK_BEGIN,
         "# Archive each context compaction into <project>/conversations/ and inject a",
@@ -128,7 +152,8 @@ def install_kimi(root, scope):
             kept.append(line)
     kept.extend(block)
     atomic_write_text(cfg, "\n".join(kept) + "\n")
-    log(f"kimi: hooks registered in {cfg}")
+    log(f"kimi: hooks registered in {cfg} (scripts hosted in {hooks_dir})")
+    log("kimi: run /reload in the TUI (or restart) to activate hook changes")
     log("kimi: next /compact (or auto compaction) will archive into <project>/conversations/")
 
 
