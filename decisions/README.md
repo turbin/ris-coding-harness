@@ -10,3 +10,4 @@ RSI 闭环 MUTATE 环节（`docs/rsi-design.md` §4.4）的审计轨迹：
 - `2026-08-29-eval-expansion.md` — L3 资产新增：eval 任务集 10 → 20
 - `2026-09-18-task-cost-budget.md` — L2+L3：任务级 token/费用预算（PM 声明 + loop 强制）
 - `2026-09-20-zvec-search-routing.md` — L3 资产新增：zvec 检索路由分工 + 安装器 `--search` 初始化选项
+- `2026-09-21-ponytail-integration.md` — L2 资产新增：vendor ponytail 反过度工程规则集（PM/Coder/Reviewer 三角色挂接；完整 pass@1 回归随下一次协议战役）

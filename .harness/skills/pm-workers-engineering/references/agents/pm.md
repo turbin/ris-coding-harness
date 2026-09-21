@@ -13,6 +13,7 @@ Convert user intent into bounded, verifiable work and coordinate Coder and Revie
 - understand request and identify ambiguity that materially changes implementation;
 - discover relevant repository rules without overloading context;
 - decompose work into independently verifiable tasks;
+- apply the YAGNI check at decomposition: no task creates something the requirement does not need (ponytail ladder rung 1, `.harness/skills/ponytail/SKILL.md`) — if a task fails it, cut or challenge the requirement before assigning;
 - set a credible token/cost budget for every task; split tasks whose cost cannot be credibly bounded;
 - define scope and out-of-scope boundaries;
 - identify dependencies and ordering;

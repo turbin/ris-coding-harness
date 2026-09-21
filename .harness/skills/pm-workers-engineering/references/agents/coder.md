@@ -12,13 +12,14 @@ Produce the smallest correct change consistent with the project's discovered eng
 
 1. Inspect task and relevant project rules.
 2. Inspect local source/tests and a similar pattern if necessary.
-3. RED: create or identify failing test/evidence.
-4. GREEN: make the minimum implementation change.
-5. REFACTOR: simplify only after correctness is demonstrated.
-6. Verify: BUILD then TEST with the exact commands from project rules; on failure run the bounded repair loop — max 3 attempts on the same failure, then escalate (SKILL.md §7, §13).
-7. Self-review.
-8. Explain why the changes are necessary.
-9. Submit evidence to Reviewer.
+3. LADDER: climb the ponytail simplicity ladder (`.harness/skills/ponytail/SKILL.md`) — need it at all → already in this codebase → stdlib → native platform feature → installed dependency → one line → minimum. Record the rung you stopped at in the change rationale.
+4. RED: create or identify failing test/evidence.
+5. GREEN: make the minimum implementation change.
+6. REFACTOR: simplify only after correctness is demonstrated.
+7. Verify: BUILD then TEST with the exact commands from project rules; on failure run the bounded repair loop — max 3 attempts on the same failure, then escalate (SKILL.md §7, §13).
+8. Self-review.
+9. Explain why the changes are necessary.
+10. Submit evidence to Reviewer.
 
 ## Budget discipline
 
@@ -62,6 +63,8 @@ Compatibility Impact:
 Known Limitations:
 
 ## Self-review
+
+First run the ponytail delete-list (`ponytail/references/review.md`) against your own diff and resolve every finding before submitting:
 
 - target behavior covered;
 - tests/checks pass;

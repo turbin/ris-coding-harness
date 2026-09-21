@@ -30,10 +30,13 @@ Try to falsify the implementation's correctness and quality claims before accept
 - claimed RED evidence is credible.
 
 ### Simplicity
-- implementation can be smaller;
+Judge with the ponytail delete-list criteria (`.harness/skills/ponytail/references/review.md`): every finding carries a tag — `delete:` / `stdlib:` / `native:` / `yagni:` / `shrink:` — plus a named replacement, not taste. Check:
+- the ladder was climbed: skipped rungs (existing code, stdlib, native, installed dependency) need justification in the Coder's rationale;
+- implementation can be smaller (a named shorter form exists);
 - duplicate state or logic exists;
 - helper/wrapper/manager layers are justified;
 - unrelated cleanup slipped into the change.
+Severity: NIT for stylistic cuts; MAJOR when a ladder rung was skipped without justification; BLOCKER when the diff can shrink materially while preserving behavior. End the Complexity Review with the delete-list net: `net: -<N> lines possible.` or `Lean already. Ship.`
 
 ### Runtime resources
 Ask:

@@ -125,7 +125,7 @@ curl -fsSL https://raw.githubusercontent.com/turbin/ris-coding-harness/main/inst
 
 ### 必需 Skill 自检与自愈
 
-安装器把源仓库 `skills/` 下的每个目录视为必需 Skill（当前为 `pm-workers-engineering`、`rsi-loop`）。`--check`（PowerShell 为 `-Check`）只检测不写入：逐项输出 `ok` / `incomplete` / `missing` 状态行，全部齐备退出码 0，有缺失退出码 1 并打印修复命令，参数错误（如与 `--no-skill` 同用）退出码 2。
+安装器把源仓库 `skills/` 下的每个目录视为必需 Skill（当前为 `pm-workers-engineering`、`rsi-loop`、`ponytail`）。`--check`（PowerShell 为 `-Check`）只检测不写入：逐项输出 `ok` / `incomplete` / `missing` 状态行，全部齐备退出码 0，有缺失退出码 1 并打印修复命令，参数错误（如与 `--no-skill` 同用）退出码 2。
 
 ```bash
 ./install.sh --target . --check          # 检测 .harness/skills/
@@ -198,6 +198,9 @@ docs/engineering/                # 当前工程自己的特殊规则
         pm.md
         coder.md
         reviewer.md
+  ponytail/                      # 反过度工程规则集（vendor 自 DietrichGebert/ponytail，MIT，见目录内 UPSTREAM.md）
+    SKILL.md                     # 简约阶梯（YAGNI → 复用 → 标准库 → 原生 → 已有依赖 → 一行 → 最小）
+    references/                  # review（diff delete-list）/ audit / debt / gain
 ```
 
 使用 `--agent` 时，Skill 还会按参数表复制到 `.claude/skills/`、`.pi/skills/`、`.kimi/skills/`、`.opencode/skills/`、`.codex/skills/` 等对应目录。

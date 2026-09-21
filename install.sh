@@ -298,6 +298,7 @@ ROUTING
 
 - `.harness/skills/pm-workers-engineering/SKILL.md` — PM-Workers protocol: PM decomposes, Coder TDD, Reviewer adversarial gate. Load role references only when the role is active.
 - `.harness/skills/rsi-loop/SKILL.md` — RSI self-improvement loop. In this project it runs in observe-only self-check mode; the full loop runs only in the harness self-hosted repository.
+- `.harness/skills/ponytail/SKILL.md` — anti-over-engineering ruleset (vendored, MIT): the simplicity ladder (YAGNI → reuse → stdlib → native → existing dep → one line → minimum). The pm-workers Coder and Reviewer roles reference it; invoke directly for coding-task minimalism.
 
 **Engineering rules (decision layer, outside `.harness/`)**
 
