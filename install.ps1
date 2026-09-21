@@ -37,7 +37,12 @@
   under the target project or under the user home.
 
 .EXAMPLE
+  .\install.ps1 -Mode init
+  # initialize the CURRENT directory
+
+.EXAMPLE
   .\install.ps1 -Target .\my-project -Mode init
+  # create a NEW project dir; run this from its PARENT directory
 
 .EXAMPLE
   .\install.ps1 -Target .\my-project -Agent claude,opencode -Scope project
@@ -152,6 +157,24 @@ elseif ($Check) {
   $TargetRoot = $Target
 }
 else {
+  # Anti-nesting guard: a bare relative -Target (no separators) that does not
+  # exist, given from an empty or already harness-managed directory, almost
+  # always means "initialize THIS directory" (the docs examples read that way
+  # when copied from inside the new project). Explicit .\name or an absolute
+  # path bypasses the guard.
+  $hasSep = $Target -match '[\\/]'
+  $cwdEmpty = (@(Get-ChildItem -Force -LiteralPath "." -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -ne ".git" -and $_.Name -ne ".DS_Store" } |
+    Select-Object -First 2).Count -eq 0)
+  $managedHere = $false
+  $agentsHere = Join-Path (Get-Location).Path "AGENTS.md"
+  if (Test-Path -LiteralPath $agentsHere) {
+    $managedHere = ((Get-Content -LiteralPath $agentsHere -Raw) -match [regex]::Escape("ris-coding-harness:begin"))
+  }
+  if (-not $hasSep -and ($cwdEmpty -or $managedHere)) {
+    [Console]::Error.WriteLine("error: refusing -Target `"$Target`": it does not exist and the current directory looks like the project root you want to initialize (empty or already harness-managed). Initialize in place with -Target . , or pass an explicit path like .\$Target to nest a new project deliberately.")
+    exit 2
+  }
   New-Item -ItemType Directory -Force -Path $Target | Out-Null
   $TargetRoot = (Resolve-Path $Target).Path
 }

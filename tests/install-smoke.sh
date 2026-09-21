@@ -251,4 +251,43 @@ fi
 # The local-form repair hint must land in the installed AGENTS.md.
 grep -q -- '--mode adopt' "$TMP/new/AGENTS.md"
 
+# Anti-nesting guard: a bare relative --target that does not exist, run from
+# an empty (or already harness-managed) directory, is refused with guidance —
+# the README examples read exactly that way when copied from inside the new
+# project directory.
+NEST="$TMP/nestcwd"
+mkdir -p "$NEST"
+rc=0; nest_out="$( cd "$NEST" && "$ROOT/install.sh" --target my-project --mode auto --no-git 2>&1 )" || rc=$?
+[ "$rc" -eq 2 ] || { echo "install smoke test: FAIL (anti-nesting guard rc=$rc, want 2)" >&2; exit 1; }
+printf '%s\n' "$nest_out" | grep -q -- '--target \.'
+[ ! -e "$NEST/my-project" ]
+
+# Escape hatch: an explicit ./name (or an absolute path) still nests on purpose.
+( cd "$NEST" && "$ROOT/install.sh" --target ./my-project --mode auto --no-git >/dev/null )
+[ -f "$NEST/my-project/AGENTS.md" ]
+
+# Documented new-project flow: a non-empty cwd + bare name still works.
+DOCU="$TMP/docucwd"
+mkdir -p "$DOCU"
+printf 'seed\n' > "$DOCU/seed.txt"
+( cd "$DOCU" && "$ROOT/install.sh" --target my-project --mode auto --no-git >/dev/null )
+[ -f "$DOCU/my-project/AGENTS.md" ]
+
+# git init: a fresh target gets a repository; a re-run keeps it (idempotent).
+GITP="$TMP/gitproj"
+mkdir -p "$GITP"
+"$ROOT/install.sh" --target "$GITP" --mode auto >/dev/null
+[ -d "$GITP/.git" ]
+GITP_OUT="$("$ROOT/install.sh" --target "$GITP" --mode auto 2>&1)"
+printf '%s\n' "$GITP_OUT" | grep -q 'keep   .git'
+
+# git init: a .git FILE (worktree-style) counts as already-initialized and is
+# left untouched.
+GITF="$TMP/gitfile"
+mkdir -p "$GITF"
+printf 'gitdir: /elsewhere\n' > "$GITF/.git"
+GITF_OUT="$("$ROOT/install.sh" --target "$GITF" --mode auto 2>&1)"
+printf '%s\n' "$GITF_OUT" | grep -q 'keep   .git'
+[ -f "$GITF/.git" ]
+
 echo "install smoke test: PASS"

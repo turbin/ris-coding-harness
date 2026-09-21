@@ -21,6 +21,8 @@ curl -fsSL https://raw.githubusercontent.com/turbin/ris-coding-harness/main/inst
 
 ### 显式初始化新工程
 
+在**父目录**执行（`--target` 指向尚不存在的工程名）；若已站在自己的新目录里，直接 `--target .`（或省略）即可原地初始化——安装器对「空目录 + 裸目录名」的嵌套误用会拒绝并给出指引：
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/turbin/ris-coding-harness/main/install.sh | \
   bash -s -- --target ./my-project --mode init

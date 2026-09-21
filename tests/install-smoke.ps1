@@ -219,6 +219,46 @@ exit 0
   Assert-True (Test-Path (Join-Path $Mig ".rsi/policy.yaml")) "customized legacy policy stays"
   Assert-True (($migOut -join "`n") -match "left in place") "customized leftovers reported"
 
+  # Anti-nesting guard: bare relative -Target from an empty cwd is refused.
+  $Nest = Join-Path $Tmp "nestcwd"
+  New-Item -ItemType Directory -Force -Path $Nest | Out-Null
+  Push-Location $Nest
+  & (Join-Path $Root "install.ps1") -Target my-project -Mode auto -NoGit 2>&1 | Out-Null
+  Pop-Location
+  Assert-True ($LASTEXITCODE -eq 2) "anti-nesting guard must exit 2"
+  Assert-True (-not (Test-Path (Join-Path $Nest "my-project"))) "guard must not create the nested dir"
+
+  # Escape hatch: explicit .\name still nests on purpose.
+  Push-Location $Nest
+  & (Join-Path $Root "install.ps1") -Target .\my-project -Mode auto -NoGit | Out-Null
+  Pop-Location
+  Assert-True ($LASTEXITCODE -eq 0) "explicit .\name nested flow works"
+  Assert-True (Test-Path (Join-Path $Nest "my-project/AGENTS.md")) "nested project installed"
+
+  # Documented flow: non-empty cwd + bare name still works.
+  $Docu = Join-Path $Tmp "docucwd"
+  New-Item -ItemType Directory -Force -Path $Docu | Out-Null
+  [System.IO.File]::WriteAllText((Join-Path $Docu "seed.txt"), "seed")
+  Push-Location $Docu
+  & (Join-Path $Root "install.ps1") -Target my-project -Mode auto -NoGit | Out-Null
+  Pop-Location
+  Assert-True ($LASTEXITCODE -eq 0) "bare -Target from non-empty cwd works"
+  Assert-True (Test-Path (Join-Path $Docu "my-project/AGENTS.md")) "subproject installed"
+
+  # git init: fresh target gets a repository; re-run keeps it; .git FILE counts.
+  $GitProj = Join-Path $Tmp "gitproj"
+  New-Item -ItemType Directory -Force -Path $GitProj | Out-Null
+  & (Join-Path $Root "install.ps1") -Target $GitProj -Mode auto | Out-Null
+  Assert-True (Test-Path (Join-Path $GitProj ".git")) "git init ran on fresh target"
+  $gitAgain = & (Join-Path $Root "install.ps1") -Target $GitProj -Mode auto 6>&1
+  Assert-True (($gitAgain -join "`n") -match "keep\s+\.git") "second run keeps .git"
+  $GitFile = Join-Path $Tmp "gitfile"
+  New-Item -ItemType Directory -Force -Path $GitFile | Out-Null
+  [System.IO.File]::WriteAllText((Join-Path $GitFile ".git"), "gitdir: /elsewhere")
+  $gitFileOut = & (Join-Path $Root "install.ps1") -Target $GitFile -Mode auto 6>&1
+  Assert-True (($gitFileOut -join "`n") -match "keep\s+\.git") ".git file counts as initialized"
+  Assert-True (-not (Test-Path -LiteralPath (Join-Path $GitFile ".git") -PathType Container)) ".git file left untouched"
+
   Write-Host "install smoke test: PASS"
 }
 finally {

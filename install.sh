@@ -54,7 +54,9 @@ Modes:
   adopt  Add agent routing/rules/skill without restructuring source layout
 
 Examples:
-  ./install.sh --target my-project --mode init
+  ./install.sh                                   # initialize the CURRENT directory
+  ./install.sh --target my-project --mode init   # create a NEW project dir;
+                                                 # run this from its PARENT directory
   ./install.sh --target existing-project --mode adopt
   ./install.sh --agent claude,opencode
   ./install.sh --agent all --scope user
@@ -100,6 +102,16 @@ if [ "$CHECK" -eq 1 ] && [ "$INSTALL_SKILL" -eq 0 ]; then
   exit 2
 fi
 
+# A bare relative --target (no '/') is treated as a NAME by the docs, so when
+# it does not exist and the current directory looks like the project root the
+# user wants to initialize (empty, or already harness-managed), refuse with
+# guidance instead of silently nesting. An explicit ./name or an absolute
+# path bypasses the guard.
+is_near_empty() {
+  count="$(find "${1:-.}" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.DS_Store' | wc -l | tr -d ' ')"
+  [ "$count" -eq 0 ]
+}
+
 if [ "$CHECK" -eq 1 ]; then
   # Never create the target in check mode; an absent target simply means
   # every project-scoped destination is missing.
@@ -107,6 +119,14 @@ if [ "$CHECK" -eq 1 ]; then
     TARGET="$abs_target"
   fi
 else
+  if ! printf '%s' "$TARGET" | grep -q '/' && [ ! -e "$TARGET" ] \
+     && { is_near_empty || grep -qF "$BEGIN_MARK" "$TARGET/AGENTS.md" 2>/dev/null; }; then
+    echo "error: refusing --target \"$TARGET\": it does not exist and the current directory" >&2
+    echo "looks like the project root you want to initialize (empty or already harness-managed)." >&2
+    echo "Initialize in place with --target . , or pass an explicit path like ./$TARGET to nest" >&2
+    echo "a new project deliberately." >&2
+    exit 2
+  fi
   mkdir -p "$TARGET"
   TARGET="$(cd "$TARGET" && pwd)"
 fi
@@ -188,13 +208,8 @@ skill_dest() {
   esac
 }
 
-is_near_empty() {
-  count="$(find "$TARGET" -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.DS_Store' | wc -l | tr -d ' ')"
-  [ "$count" -eq 0 ]
-}
-
 if [ "$MODE" = "auto" ] && [ "$CHECK" -eq 0 ]; then
-  if is_near_empty; then MODE="init"; else MODE="adopt"; fi
+  if is_near_empty "$TARGET"; then MODE="init"; else MODE="adopt"; fi
 fi
 
 # Resolve and validate skill destinations up front so an unknown --agent
@@ -700,15 +715,15 @@ fi
 
 if [ "$GIT_INIT" -eq 1 ]; then
   if command -v git >/dev/null 2>&1; then
-    if [ ! -d "$TARGET/.git" ]; then
+  if [ -e "$TARGET/.git" ]; then
+      echo "keep   .git"
+    else
       if git -C "$TARGET" init -b main >/dev/null 2>&1; then
         :
       else
         git -C "$TARGET" init >/dev/null
       fi
       echo "init   .git"
-    else
-      echo "keep   .git"
     fi
   else
     echo "warn   git not found; repository not initialized" >&2
