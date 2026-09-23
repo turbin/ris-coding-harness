@@ -4,6 +4,30 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# The installer distributes the skills marked scope=user in
+# .harness/skill-scope.txt into the agent user directories under the user home,
+# so this test re-launches itself in a child process with an isolated
+# USERPROFILE/HOME: PowerShell binds $HOME at process start, which means the
+# variables must be set before the process that runs install.ps1 begins. The
+# real user profile is never touched. The child runs the test body below.
+if ($env:RIS_SMOKE_ISOLATED -ne "1") {
+  $IsoHome = Join-Path ([System.IO.Path]::GetTempPath()) ("ris-smoke-home-" + [System.Guid]::NewGuid().ToString("N"))
+  New-Item -ItemType Directory -Force -Path $IsoHome | Out-Null
+  # Run from the isolated home: PowerShell resolves profile-derived caches
+  # (Microsoft\Windows\PowerShell\ModuleAnalysisCache) relative to the current
+  # directory when the overridden profile cannot be resolved, and that must not
+  # litter the repository working tree.
+  Set-Location -LiteralPath $IsoHome
+  $env:RIS_SMOKE_ISOLATED = "1"
+  $env:USERPROFILE = $IsoHome
+  $env:HOME = $IsoHome
+  $env:KIMI_CODE_HOME = Join-Path $IsoHome ".kimi-code"
+  & powershell -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path
+  $ChildRc = $LASTEXITCODE
+  Remove-Item -Recurse -Force $IsoHome -ErrorAction SilentlyContinue
+  exit $ChildRc
+}
+
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $Tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("ris-smoke-" + [System.Guid]::NewGuid().ToString("N"))
 
@@ -34,7 +58,29 @@ try {
   Assert-True (Test-Path (Join-Path $New ".harness/.rsi/policy.yaml")) "new policy"
   Assert-True (Test-Path (Join-Path $New ".harness/manifest.json")) "new manifest"
   Assert-True ((Get-Content (Join-Path $New ".harness/manifest.json") -Raw) -match '"sha256"') "manifest hashes"
+  # Manifest records the two scopes: project skills, user skills, and where the
+  # user-level ones landed (absolute paths outside the target).
+  $manifest = Get-Content (Join-Path $New ".harness/manifest.json") -Raw
+  Assert-True ($manifest -notmatch '"skills":\s*\[[^]]*c4-architecture') "user-level skill must not be listed as a project skill"
+  Assert-True ($manifest -match '"user_skills":\s*\[\s*"c4-architecture",\s*"mermaid-diagrams"\s*\]') "manifest user_skills"
+  Assert-True ($manifest -match '"skill_scope":\s*\{[^}]*"c4-architecture":\s*"user"') "manifest skill_scope"
+  Assert-True ($manifest -match '"user_agent_destinations"') "manifest user destinations"
+  Assert-True ($manifest -match "\.kimi-code") "manifest kimi-code destination"
   Assert-True (Test-Path (Join-Path $New "evals/results")) "new evals/results"
+
+  # Both vendored diagram skills are user-level (.harness/skill-scope.txt): they
+  # land in the agent user directories and never inside the project.
+  Assert-True (-not (Test-Path (Join-Path $New ".harness/skills/c4-architecture"))) "c4-architecture stays out of .harness/skills"
+  Assert-True (-not (Test-Path (Join-Path $New ".harness/skills/mermaid-diagrams"))) "mermaid-diagrams stays out of .harness/skills"
+  foreach ($rel in @(".claude/skills", ".pi/agent/skills", ".kimi-code/skills", ".config/opencode/skills", ".codex/skills", ".agents/skills")) {
+    Assert-True (Test-Path (Join-Path $HOME "$rel/c4-architecture/SKILL.md")) "user c4-architecture in $rel"
+    Assert-True (Test-Path (Join-Path $HOME "$rel/mermaid-diagrams/SKILL.md")) "user mermaid-diagrams in $rel"
+  }
+  Assert-True (-not (Test-Path (Join-Path $HOME ".kimi"))) "retired ~/.kimi is not used"
+  $agentsMd = Get-Content (Join-Path $New "AGENTS.md") -Raw
+  Assert-True ($agentsMd -match "User-level skills") "managed section marks user-level skills"
+  Assert-True ($agentsMd -match "\.kimi-code/skills/c4-architecture/") "managed section names the kimi-code home"
+  Assert-True ($agentsMd -match "\.claude/skills/mermaid-diagrams/") "managed section names the claude home"
 
   # Existing project should be adopted without canonical source/test directories.
   Assert-True (Test-Path (Join-Path $Existing "AGENTS.md")) "existing/AGENTS.md"
@@ -61,7 +107,8 @@ try {
   $coding = Get-Content (Join-Path $Existing "docs/engineering/coding.md") -Raw
   Assert-True ($coding -match "^# local customization") "local customization preserved"
 
-  # -Agent claude,opencode,codex installs the skill to .harness plus all three agent dirs.
+  # -Agent claude,opencode,codex installs the project skills to .harness plus all
+  # three agent dirs; user-level skills stay in the user directories.
   $Multi = Join-Path $Tmp "multi"
   New-Item -ItemType Directory -Force -Path $Multi | Out-Null
   & (Join-Path $Root "install.ps1") -Target $Multi -Mode adopt -NoGit -Agent claude,opencode,codex | Out-Null
@@ -69,6 +116,9 @@ try {
   Assert-True (Test-Path (Join-Path $Multi ".claude/skills/pm-workers-engineering/SKILL.md")) "multi .claude skill"
   Assert-True (Test-Path (Join-Path $Multi ".opencode/skills/pm-workers-engineering/SKILL.md")) "multi .opencode skill"
   Assert-True (Test-Path (Join-Path $Multi ".codex/skills/pm-workers-engineering/SKILL.md")) "multi .codex skill"
+  Assert-True (-not (Test-Path (Join-Path $Multi ".claude/skills/c4-architecture"))) "user-level skill stays out of .claude/skills"
+  Assert-True (-not (Test-Path (Join-Path $Multi ".opencode/skills/mermaid-diagrams"))) "user-level skill stays out of .opencode/skills"
+  Assert-True (-not (Test-Path (Join-Path $Multi ".codex/skills/c4-architecture"))) "user-level skill stays out of .codex/skills"
 
   # -Agent accepts multiple names as an array (repeated parameters cannot bind).
   $Repeat = Join-Path $Tmp "repeat"
@@ -91,11 +141,14 @@ try {
   Assert-True (($checkOut -join "`n") -match "missing") "absent target must report missing skills"
   Assert-True (-not (Test-Path $CheckAbsent)) "-Check must not create the target"
 
-  # -Check covers skills, policy, and the AGENTS.md managed section.
+  # -Check covers skills, policy, and the AGENTS.md managed section, and reports
+  # the user-level copies in the agent user directories.
   $checkOut = & (Join-Path $Root "install.ps1") -Target $New -Check 6>&1
   Assert-True ($LASTEXITCODE -eq 0) "-Check must pass after install"
   Assert-True (($checkOut -join "`n") -match "\.harness/.rsi/policy\.yaml") "policy check line"
   Assert-True (($checkOut -join "`n") -match "AGENTS\.md managed section") "managed section check line"
+  Assert-True (($checkOut -join "`n") -match [regex]::Escape((Join-Path $HOME ".kimi-code/skills/c4-architecture"))) "user-level c4 check line"
+  Assert-True (($checkOut -join "`n") -match [regex]::Escape((Join-Path $HOME ".claude/skills/mermaid-diagrams"))) "user-level mermaid check line"
 
   # -Check -Agent flags a destination that was never installed.
   $checkOut = & (Join-Path $Root "install.ps1") -Target $New -Check -Agent claude 6>&1
@@ -112,6 +165,36 @@ try {
   Assert-True ($LASTEXITCODE -eq 0) "-Check must pass after repair"
   $coding = Get-Content (Join-Path $Existing "docs/engineering/coding.md") -Raw
   Assert-True ($coding -match "^# local customization") "local customization preserved"
+
+  # A deleted user-level copy is detected and healed by a re-run.
+  Remove-Item (Join-Path $HOME ".codex/skills/c4-architecture/SKILL.md") -Force
+  $checkOut = & (Join-Path $Root "install.ps1") -Target $New -Check 6>&1
+  Assert-True ($LASTEXITCODE -eq 1) "-Check must detect an incomplete user-level skill"
+  Assert-True (($checkOut -join "`n") -match "incomplete .*codex.*c4-architecture") "incomplete user-level skill reported"
+  & (Join-Path $Root "install.ps1") -Target $New -Mode adopt -NoGit | Out-Null
+  Assert-True (Test-Path (Join-Path $HOME ".codex/skills/c4-architecture/SKILL.md")) "user-level skill healed"
+  Assert-True (-not (Test-Path (Join-Path $New ".harness/skills/c4-architecture"))) "healing stays out of the project"
+
+  # A user-level copy that is absent entirely is reported missing (exit 1).
+  Move-Item (Join-Path $HOME ".agents/skills/mermaid-diagrams") (Join-Path $HOME "mermaid-diagrams-away")
+  $checkOut = & (Join-Path $Root "install.ps1") -Target $New -Check 6>&1
+  Assert-True ($LASTEXITCODE -eq 1) "-Check must detect a missing user-level skill"
+  Assert-True (($checkOut -join "`n") -match "missing .*agents.*mermaid-diagrams") "missing user-level skill reported"
+  & (Join-Path $Root "install.ps1") -Target $New -Mode adopt -NoGit | Out-Null
+  Assert-True (Test-Path (Join-Path $HOME ".agents/skills/mermaid-diagrams/SKILL.md")) "missing user-level skill restored"
+  Assert-True (-not (Test-Path (Join-Path $New ".harness/skills/mermaid-diagrams"))) "restore stays out of the project"
+
+  # -Scope user installs every skill under the (isolated) user home and uses the
+  # Kimi Code home for kimi/kimi-code, never the retired ~/.kimi.
+  $UserProj = Join-Path $Tmp "userproj"
+  New-Item -ItemType Directory -Force -Path $UserProj | Out-Null
+  & (Join-Path $Root "install.ps1") -Target $UserProj -Mode adopt -NoGit -Scope user -Agent claude,kimi-code -SkipEnv | Out-Null
+  Assert-True ($LASTEXITCODE -eq 0) "-Scope user install succeeds"
+  Assert-True (Test-Path (Join-Path $HOME ".claude/skills/pm-workers-engineering/SKILL.md")) "user-scope claude skill"
+  Assert-True (Test-Path (Join-Path $HOME ".kimi-code/skills/pm-workers-engineering/SKILL.md")) "user-scope kimi-code skill"
+  Assert-True (Test-Path (Join-Path $HOME ".kimi-code/skills/c4-architecture/SKILL.md")) "user-scope kimi-code c4 skill"
+  Assert-True (-not (Test-Path (Join-Path $HOME ".kimi/skills"))) "user-scope must not write the retired ~/.kimi"
+  Assert-True (-not (Test-Path (Join-Path $UserProj ".claude"))) "user-scope leaves no project agent dir"
 
   # -Check and -NoSkill are mutually exclusive.
   & (Join-Path $Root "install.ps1") -Target $New -Check -NoSkill 2>&1 | Out-Null

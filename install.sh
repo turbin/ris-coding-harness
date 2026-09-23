@@ -195,17 +195,112 @@ $dst"
   printf 'write  %s\n' "${dst#$TARGET/}"
 }
 
-# Print the skills directory for an agent according to SCOPE.
-skill_dest() {
+# User-level skill directories live under the user home (HOME may be unset in
+# stripped-down environments; callers check before relying on it).
+USER_HOME="${HOME:-}"
+
+SUPPORTED_AGENTS="claude pi kimi kimi-code opencode codex agents"
+
+is_supported_agent() {
   case "$1" in
-    claude)         [ "$SCOPE" = "user" ] && echo "$HOME/.claude/skills" || echo "$TARGET/.claude/skills" ;;
-    pi)             [ "$SCOPE" = "user" ] && echo "$HOME/.pi/agent/skills" || echo "$TARGET/.pi/skills" ;;
-    kimi|kimi-code) [ "$SCOPE" = "user" ] && echo "$HOME/.kimi/skills" || echo "$TARGET/.kimi/skills" ;;
-    opencode)       [ "$SCOPE" = "user" ] && echo "$HOME/.config/opencode/skills" || echo "$TARGET/.opencode/skills" ;;
-    codex)          [ "$SCOPE" = "user" ] && echo "$HOME/.codex/skills" || echo "$TARGET/.codex/skills" ;;
-    agents)         [ "$SCOPE" = "user" ] && echo "$HOME/.agents/skills" || echo "$TARGET/.agents/skills" ;;
+    claude|pi|kimi|kimi-code|opencode|codex|agents) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# Print the skills directory for an agent. $1 = agent, $2 = scope (default SCOPE).
+skill_dest() {
+  scope="${2:-$SCOPE}"
+  case "$1" in
+    claude)         [ "$scope" = "user" ] && echo "$USER_HOME/.claude/skills" || echo "$TARGET/.claude/skills" ;;
+    pi)             [ "$scope" = "user" ] && echo "$USER_HOME/.pi/agent/skills" || echo "$TARGET/.pi/skills" ;;
+    kimi|kimi-code) [ "$scope" = "user" ] && echo "$USER_HOME/.kimi-code/skills" || echo "$TARGET/.kimi/skills" ;;
+    opencode)       [ "$scope" = "user" ] && echo "$USER_HOME/.config/opencode/skills" || echo "$TARGET/.opencode/skills" ;;
+    codex)          [ "$scope" = "user" ] && echo "$USER_HOME/.codex/skills" || echo "$TARGET/.codex/skills" ;;
+    agents)         [ "$scope" = "user" ] && echo "$USER_HOME/.agents/skills" || echo "$TARGET/.agents/skills" ;;
+    *) return 1 ;;
+  esac
+}
+
+# --- Skill distribution scope (.harness/skill-scope.txt) ------------------------
+# Repository-level manifest mapping a skill to its distribution scope; skills
+# not listed default to "project" (installed inside the target project and its
+# project-local agent directories). "user" skills install into the agent
+# user-level skill directories instead. Format: <skill> <scope> [agents].
+SKILL_SCOPE_FILE="$SOURCE_ROOT/skill-scope.txt"
+
+# Print the declared scope of a skill (empty when unlisted = project).
+skill_scope() {
+  [ -f "$SKILL_SCOPE_FILE" ] || return 0
+  awk -v name="$1" '
+    /^[[:space:]]*#/ { next }
+    NF < 2 { next }
+    $1 == name { s = $2 }
+    END { if (s != "") print s }
+  ' "$SKILL_SCOPE_FILE"
+}
+
+# Print the agents a user-level skill targets ("all" when unlisted).
+skill_scope_agents() {
+  [ -f "$SKILL_SCOPE_FILE" ] || { echo "all"; return 0; }
+  awk -v name="$1" '
+    /^[[:space:]]*#/ { next }
+    NF < 2 { next }
+    $1 == name { a = ($3 == "" ? "all" : $3) }
+    END { print (a == "" ? "all" : a) }
+  ' "$SKILL_SCOPE_FILE"
+}
+
+# Append a destination to DEST_ACC unless it is already there.
+append_dest() {
+  if [ "${#DEST_ACC[@]}" -gt 0 ]; then
+    for d in "${DEST_ACC[@]}"; do
+      if [ "$d" = "$1" ]; then return 0; fi
+    done
+  fi
+  DEST_ACC+=("$1")
+}
+
+# Resolve an agent list (space separated, already validated) into the skill
+# destinations for a scope, appended to DEST_ACC.
+collect_dests() {
+  scope_saved="$SCOPE"
+  SCOPE="$2"
+  for a in ${1:-}; do
+    dest="$(skill_dest "$a")"
+    append_dest "$dest"
+  done
+  SCOPE="$scope_saved"
+}
+
+# Resolve the user-level destinations of one skill into DEST_ACC: the agents
+# from the scope manifest, narrowed by --agent when given.
+user_skill_dests() {
+  DEST_ACC=()
+  for a in $(printf '%s' "$(skill_scope_agents "$1")" | tr ',' ' ' | tr '[:upper:]' '[:lower:]'); do
+    case "$a" in all) batch="$SUPPORTED_AGENTS" ;; *) batch="$a" ;; esac
+    for b in $batch; do
+      if ! is_supported_agent "$b"; then
+        echo "Unknown agent for skill \"$1\": $b (in $SKILL_SCOPE_FILE)" >&2
+        echo "Supported agents: claude, pi, kimi, kimi-code, opencode, codex, agents, all" >&2
+        exit 2
+      fi
+      if [ -n "$AGENT_NAMES" ]; then
+        case " $AGENT_NAMES " in *" $b "*) ;; *) continue ;; esac
+      fi
+      append_dest "$(skill_dest "$b" user)"
+    done
+  done
+}
+
+# Create a user-level destination or fail loudly: silently skipping it would
+# report a successful install while nothing was actually installed.
+ensure_writable_dir() {
+  if ! mkdir -p "$1" 2>/dev/null || [ ! -w "$1" ]; then
+    echo "error: cannot write user-level skill directory: $1" >&2
+    echo "Fix the permissions of \"$USER_HOME\" (or set HOME to a writable directory) and re-run the installer." >&2
+    exit 1
+  fi
 }
 
 if [ "$MODE" = "auto" ] && [ "$CHECK" -eq 0 ]; then
@@ -214,34 +309,54 @@ fi
 
 # Resolve and validate skill destinations up front so an unknown --agent
 # fails before any file is written.
+DEST_ACC=()
 SKILL_DESTS=()
+USER_SKILL_DESTS=()
+USER_SKILL_NAMES=""
+AGENT_NAMES=""
 if [ "$INSTALL_SKILL" -eq 1 ]; then
-  SKILL_DESTS=("$TARGET/.harness/skills")
-  if [ -n "$AGENTS_LIST" ]; then
-    requested=""
-    OLD_IFS="$IFS"; IFS=','
-    for a in $AGENTS_LIST; do
-      a="$(printf '%s' "$a" | tr '[:upper:]' '[:lower:]')"
-      if [ -z "$a" ]; then continue; fi
-      if [ "$a" = "all" ]; then
-        requested="$requested claude pi kimi kimi-code opencode codex agents"
-      else
-        requested="$requested $a"
-      fi
-    done
-    IFS="$OLD_IFS"
-    for a in $requested; do
-      if ! dest="$(skill_dest "$a")"; then
-        echo "Unknown agent: $a" >&2
+  for a in $(printf '%s' "$AGENTS_LIST" | tr ',' ' ' | tr '[:upper:]' '[:lower:]'); do
+    case "$a" in all) batch="$SUPPORTED_AGENTS" ;; *) batch="$a" ;; esac
+    for b in $batch; do
+      if ! is_supported_agent "$b"; then
+        echo "Unknown agent: $b" >&2
         echo "Supported agents: claude, pi, kimi, kimi-code, opencode, codex, agents, all" >&2
         exit 2
       fi
-      dup=0
-      for d in "${SKILL_DESTS[@]}"; do
-        if [ "$d" = "$dest" ]; then dup=1; break; fi
-      done
-      [ "$dup" -eq 1 ] || SKILL_DESTS+=("$dest")
+      case " $AGENT_NAMES " in *" $b "*) continue ;; esac
+      AGENT_NAMES="$AGENT_NAMES $b"
     done
+  done
+  AGENT_NAMES="${AGENT_NAMES# }"
+
+  DEST_ACC=("$TARGET/.harness/skills")
+  collect_dests "$AGENT_NAMES" "$SCOPE"
+  SKILL_DESTS=("${DEST_ACC[@]}")
+
+  for skill_src in "$SOURCE_ROOT"/skills/*/; do
+    [ -d "$skill_src" ] || continue
+    skill="$(basename "$skill_src")"
+    [ "$(skill_scope "$skill")" = "user" ] || continue
+    USER_SKILL_NAMES="$USER_SKILL_NAMES $skill"
+    user_skill_dests "$skill"
+    for d in "${DEST_ACC[@]}"; do
+      dup=0
+      if [ "${#USER_SKILL_DESTS[@]}" -gt 0 ]; then
+        for u in "${USER_SKILL_DESTS[@]}"; do
+          if [ "$u" = "$d" ]; then dup=1; break; fi
+        done
+      fi
+      [ "$dup" -eq 1 ] || USER_SKILL_DESTS+=("$d")
+    done
+  done
+  USER_SKILL_NAMES="${USER_SKILL_NAMES# }"
+
+  # User-level destinations live under the user home; without it the install
+  # cannot be honest about what it wrote.
+  if [ -z "$USER_HOME" ] && { [ -n "$USER_SKILL_NAMES" ] || [ "$SCOPE" = "user" ]; }; then
+    echo "error: HOME is not set; cannot resolve the user-level skill directory under ~/" >&2
+    echo "Set HOME to your home directory and re-run the installer." >&2
+    exit 1
   fi
 fi
 
@@ -252,7 +367,15 @@ check_required_skills() {
   for skill_src in "$SOURCE_ROOT"/skills/*/; do
     [ -d "$skill_src" ] || continue
     skill="$(basename "$skill_src")"
-    for dest in "${SKILL_DESTS[@]}"; do
+    if [ "$(skill_scope "$skill")" = "user" ]; then
+      user_skill_dests "$skill"
+    else
+      DEST_ACC=("${SKILL_DESTS[@]}")
+    fi
+    # A user-level skill whose manifest agents do not include any requested
+    # agent has nothing to check here.
+    [ "${#DEST_ACC[@]}" -gt 0 ] || continue
+    for dest in "${DEST_ACC[@]}"; do
       rel="${dest#"$TARGET"/}"
       if [ -f "$dest/$skill/SKILL.md" ]; then
         printf 'ok         %s\n' "$rel/$skill"
@@ -315,6 +438,11 @@ ROUTING
 - `.harness/skills/rsi-loop/SKILL.md` — RSI self-improvement loop. In this project it runs in observe-only self-check mode; the full loop runs only in the harness self-hosted repository.
 - `.harness/skills/ponytail/SKILL.md` — anti-over-engineering ruleset (vendored, MIT): the simplicity ladder (YAGNI → reuse → stdlib → native → existing dep → one line → minimum). The pm-workers Coder and Reviewer roles reference it; invoke directly for coding-task minimalism.
 
+**User-level skills (agent user directories, outside this project)**
+
+- `c4-architecture` (vendored, MIT) — architecture documentation as C4-model Mermaid diagrams (context / container / component / deployment). Scoped user-level in the harness repo's `.harness/skill-scope.txt`, so the installer puts it in this machine's agent user directories (`~/.kimi-code/skills/c4-architecture/`, `~/.claude/skills/c4-architecture/`, `~/.pi/agent/skills/c4-architecture/`, …) instead of `.harness/skills/` — it is not part of this repository. Invoke it directly when documenting system structure, module boundaries, or deployment topology; write to the project's existing architecture-doc location.
+- `mermaid-diagrams` (vendored, MIT) — Mermaid diagram syntax reference (flow, sequence, class, ERD, state, git graphs, charts) with per-type references, user-level like `c4-architecture` (`~/.kimi-code/skills/mermaid-diagrams/`, `~/.claude/skills/mermaid-diagrams/`, …), not part of this repository. Invoke directly when a task needs a diagram; architecture documentation (C4) is owned by c4-architecture.
+
 **Engineering rules (decision layer, outside `.harness/`)**
 
 - Start with `docs/engineering/index.md`; load only task-relevant rule files.
@@ -343,7 +471,7 @@ build_claude_section() {
 @BEGIN@
 ## Harness pointer (managed by ris-coding-harness — do not edit between the markers)
 
-This project is managed by ris-coding-harness. The repository-root `AGENTS.md` is the single routing entry (skills, engineering rules, conventions) — read it instead of duplicating rules here. Required skills live under `.harness/skills/`; gate policy under `.harness/.rsi/policy.yaml`; the managed file list is `.harness/manifest.json`.
+This project is managed by ris-coding-harness. The repository-root `AGENTS.md` is the single routing entry (skills, engineering rules, conventions) — read it instead of duplicating rules here. Required project skills live under `.harness/skills/`; user-level skills live in the agent user directories (not in this repository); gate policy under `.harness/.rsi/policy.yaml`; the managed file list is `.harness/manifest.json`.
 @END@
 SECTION
 }
@@ -458,16 +586,36 @@ write_manifest() {
   man="$man_dir/manifest.json"
   tmp="$man.tmp"
   skills_json=""
+  user_skills_json=""
+  scope_json=""
   for skill_src in "$SOURCE_ROOT"/skills/*/; do
     [ -d "$skill_src" ] || continue
-    skills_json="$skills_json\"$(basename "$skill_src")\","
+    skill="$(basename "$skill_src")"
+    if [ "$(skill_scope "$skill")" = "user" ]; then
+      user_skills_json="$user_skills_json\"$skill\","
+      scope_json="$scope_json\"$skill\": \"user\","
+    else
+      skills_json="$skills_json\"$skill\","
+      scope_json="$scope_json\"$skill\": \"project\","
+    fi
   done
   skills_json="${skills_json%,}"
+  user_skills_json="${user_skills_json%,}"
+  scope_json="${scope_json%,}"
   dests_json=""
   for d in "${SKILL_DESTS[@]}"; do
     dests_json="$dests_json\"${d#"$TARGET"/}\","
   done
   dests_json="${dests_json%,}"
+  # User-level skills land outside the target, so their destinations are
+  # recorded as absolute paths.
+  user_dests_json=""
+  if [ "${#USER_SKILL_DESTS[@]}" -gt 0 ]; then
+    for d in "${USER_SKILL_DESTS[@]}"; do
+      user_dests_json="$user_dests_json\"$d\","
+    done
+  fi
+  user_dests_json="${user_dests_json%,}"
   entries=""
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -489,7 +637,10 @@ EOF_FILES
     printf '  \"harness_repo\": \"%s\",\n' "$REPO"
     printf '  \"harness_ref\": \"%s\",\n' "$REF"
     printf '  \"skills\": [%s],\n' "$skills_json"
+    printf '  \"user_skills\": [%s],\n' "$user_skills_json"
+    printf '  \"skill_scope\": {%s},\n' "$scope_json"
     printf '  \"agent_destinations\": [%s],\n' "$dests_json"
+    printf '  \"user_agent_destinations\": [%s],\n' "$user_dests_json"
     printf '  \"files\": [\n%s\n  ]\n' "$entries"
     printf '}\n'
   } > "$tmp" && mv "$tmp" "$man"
@@ -573,9 +724,20 @@ install_skill_to() {
 if [ "$INSTALL_SKILL" -eq 1 ]; then
   for skill_src in "$SOURCE_ROOT"/skills/*/; do
     [ -d "$skill_src" ] || continue
-    for dest in "${SKILL_DESTS[@]}"; do
-      install_skill_to "$dest" "${skill_src%/}"
-    done
+    skill="$(basename "$skill_src")"
+    if [ "$(skill_scope "$skill")" = "user" ]; then
+      user_skill_dests "$skill"
+      # Nothing to do when the manifest agents exclude every requested agent.
+      [ "${#DEST_ACC[@]}" -gt 0 ] || continue
+      for dest in "${DEST_ACC[@]}"; do
+        ensure_writable_dir "$dest"
+        install_skill_to "$dest" "${skill_src%/}"
+      done
+    else
+      for dest in "${SKILL_DESTS[@]}"; do
+        install_skill_to "$dest" "${skill_src%/}"
+      done
+    fi
   done
 fi
 

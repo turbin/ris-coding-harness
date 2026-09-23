@@ -1,0 +1,4 @@
+# Skill distribution scope. Skills not listed here default to "project".
+# <skill> <scope> [agents]
+c4-architecture      user    all
+mermaid-diagrams     user    all

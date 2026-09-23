@@ -85,24 +85,42 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -Target . -Mode adopt
 | 退出码 | 含义 |
 |---|---|
 | 0 | 安装成功（env 阶段失败默认不改变退出码） |
-| 1 | `--check` 检测到 skill 缺失/不完整 |
+| 1 | `--check` 检测到 skill 缺失/不完整；或用户级 Skill 的落点不可用（HOME/USERPROFILE 未设置或不可写） |
 | 2 | 用法错误（未知选项、缺参数值、非法 `--mode`/`--scope`/`--search`、`--check` 与 `--no-skill` 同用） |
 | 3 | `--strict-env` 下环境依赖构建失败 |
 
 注：PowerShell 参数绑定错误（如 `-Target` 缺值）由运行时产生，退出码为 1，属已知偏差；其余用法错误两侧均为 2。
 
-### 按目标 agent 分发 Skill
+### Skill 分发范围（project / user）
 
-默认只安装到通用标准路径 `.harness/skills/`。用 `--agent` 追加各 agent 的原生 skill 目录（已按各官方文档核实）：
+Skill 分两档落位，由仓库级清单 `.harness/skill-scope.txt` 决定——**未列出的 Skill 一律按 `project` 处理**，默认行为不变：
 
-| `--agent` | project 作用域（默认） | user 作用域（`--scope user`） |
+| scope | 落位 | 说明 |
+|---|---|---|
+| `project`（默认） | `$TARGET/.harness/skills/`（外加 `--agent` 对应的工程内目录） | 随工程提交，团队共享 |
+| `user` | 清单 `agents` 列指定 agent 的**用户级** skill 目录 | 跨工程生效；不进 `.harness/skills/`，也不进任何工程内 agent 目录 |
+
+清单为纯文本，每行 `<skill> <scope> [agents]`（`#` 注释；`scope ∈ {project,user}`；`agents` 逗号分隔或 `all`），当前内容：
+
+```text
+c4-architecture      user    all
+mermaid-diagrams     user    all
+```
+
+user 级 Skill 每次安装都会按清单分发（沿用 `keep` 语义，只补缺失文件、不覆盖已有定制），不需要额外开关；`--no-skill` 仍然跳过全部 Skill。指定 `--agent` 时 user 级 Skill 只装到这些 agent 的用户目录（与清单 `agents` 列取交集），不指定时用清单的 `agents` 列（`all` = 全部支持 agent）。
+
+用 `--agent` 追加各 agent 的原生 skill 目录（已按各官方文档核实）：
+
+| `--agent` | project 作用域（默认） | user 作用域（`--scope user`，或清单中 scope=user 的 Skill） |
 |---|---|---|
 | `claude` | `.claude/skills/` | `~/.claude/skills/` |
 | `pi` | `.pi/skills/` | `~/.pi/agent/skills/` |
-| `kimi` / `kimi-code` | `.kimi/skills/` | `~/.kimi/skills/` |
+| `kimi` / `kimi-code` | `.kimi/skills/` | `~/.kimi-code/skills/` |
 | `opencode` | `.opencode/skills/` | `~/.config/opencode/skills/` |
 | `codex` | `.codex/skills/` | `~/.codex/skills/` |
-| `agents` | `.harness/skills/` | `~/.harness/skills/` |
+| `agents` | `.agents/skills/` | `~/.agents/skills/` |
+
+user 作用域的根目录取 `HOME`（PowerShell 侧优先 `USERPROFILE`）；未设置或不可写时安装与 `--check` 都会以清晰错误退出（退出码 1），不会静默成功。
 
 示例：
 
@@ -121,17 +139,17 @@ curl -fsSL https://raw.githubusercontent.com/turbin/ris-coding-harness/main/inst
   bash -s -- --target . --agent claude,opencode
 ```
 
-注：pi / opencode / Codex 也会读取 `.harness/skills/`，所以即使不指定它们也能发现 Skill；`--agent` 用于写入各 agent 的原生首选路径。project 作用域的 agent 目录会进入 Git，适合团队共享；user 作用域只对当前用户生效。
+注：pi / opencode / Codex 也会读取 `.harness/skills/`，所以即使不指定它们也能发现工程内 Skill；`--agent` 用于写入各 agent 的原生首选路径。project 作用域的 agent 目录会进入 Git，适合团队共享；user 作用域只对当前用户生效。kimi / kimi-code 的用户级根目录是 Kimi Code home `~/.kimi-code/`（与 hook 寄宿目录同源，见 `issues/2026-09-23-kimi-user-scope-skill-path.md`）。
 
 安装器幂等且非破坏性：默认保留已存在文件，只有显式传入 `--force` 才覆盖。
 
 ### 必需 Skill 自检与自愈
 
-安装器把源仓库 `skills/` 下的每个目录视为必需 Skill（当前为 `pm-workers-engineering`、`rsi-loop`、`ponytail`）。`--check`（PowerShell 为 `-Check`）只检测不写入：逐项输出 `ok` / `incomplete` / `missing` 状态行，全部齐备退出码 0，有缺失退出码 1 并打印修复命令，参数错误（如与 `--no-skill` 同用）退出码 2。
+安装器把源仓库 `skills/` 下的每个目录视为必需 Skill（当前为 `pm-workers-engineering`、`ponytail`、`rsi-loop`、`c4-architecture`、`mermaid-diagrams`）。`--check`（PowerShell 为 `-Check`）只检测不写入：`project` 级 Skill 查工程内目标，`user` 级 Skill 改查其用户级目录（未指定 `--agent` 时按 `.harness/skill-scope.txt` 的 `agents` 列解析，`all` 展开为全部），逐项输出 `ok` / `incomplete` / `missing` 状态行；全部齐备退出码 0，有缺失退出码 1 并打印修复命令，参数错误（如与 `--no-skill` 同用）退出码 2。用户级目标在输出中显示为绝对路径（如 `~/.kimi-code/skills/c4-architecture`）。
 
 ```bash
-./install.sh --target . --check          # 检测 .harness/skills/
-./install.sh --target . --check --agent claude   # 同时检测 .claude/skills/
+./install.sh --target . --check                  # 工程内目标 + 用户级目录
+./install.sh --target . --check --agent claude   # 追加/收窄到 .claude/skills/
 ```
 
 Skill 目录不完整（如 `SKILL.md` 被删）时，直接重跑安装器即可补齐——安装器按文件级 `keep` 语义只补缺失文件，不覆盖已有定制。
@@ -203,9 +221,20 @@ docs/engineering/                # 当前工程自己的特殊规则
   ponytail/                      # 反过度工程规则集（vendor 自 DietrichGebert/ponytail，MIT，见目录内 UPSTREAM.md）
     SKILL.md                     # 简约阶梯（YAGNI → 复用 → 标准库 → 原生 → 已有依赖 → 一行 → 最小）
     references/                  # review（diff delete-list）/ audit / debt / gain
+  rsi-loop/                      # RSI 自改进循环（在本工程的 observe-only 自检模式运行）
 ```
 
-使用 `--agent` 时，Skill 还会按参数表复制到 `.claude/skills/`、`.pi/skills/`、`.kimi/skills/`、`.opencode/skills/`、`.codex/skills/` 等对应目录。
+用户级 Skill **不**进 `.harness/skills/`，而是每次安装时落到各 agent 的用户级目录（由 `.harness/skill-scope.txt` 指定，默认全部 agent）：
+
+```text
+~/.kimi-code/skills/c4-architecture/     # C4 架构文档（vendor 自 softaworks/agent-toolkit，MIT，见目录内 UPSTREAM.md）
+                                         # SKILL.md + references/（c4-syntax / common-mistakes / advanced-patterns）
+~/.claude/skills/mermaid-diagrams/       # Mermaid 图语法参考（同一 vendor）：图类型选择 + 通用语法与最佳实践
+                                         # references/（flowchart / sequence / class / ERD / 基础设施与部署图 / 高级特性）
+                                         # 其余 agent（pi / opencode / codex / agents）为对应用户目录，见上文映射表
+```
+
+使用 `--agent` 时，`project` 级 Skill 还会按参数表复制到 `.claude/skills/`、`.pi/skills/`、`.kimi/skills/`、`.opencode/skills/`、`.codex/skills/`、`.agents/skills/` 等对应目录；`user` 级 Skill 只按清单的 `agents` 列进用户目录，不进工程内目录。
 
 `init` 模式还会创建 `src/`、`tests/`、`docs/`、`decisions/`、`issues/`、`conversations/`、`output/`、`progress/`、`scripts/`、`tmp/`、`evals/results/`（及 `evals/` 索引）。
 

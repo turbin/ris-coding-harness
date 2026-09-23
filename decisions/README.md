@@ -11,3 +11,4 @@ RSI 闭环 MUTATE 环节（`docs/rsi-design.md` §4.4）的审计轨迹：
 - `2026-09-18-task-cost-budget.md` — L2+L3：任务级 token/费用预算（PM 声明 + loop 强制）
 - `2026-09-20-zvec-search-routing.md` — L3 资产新增：zvec 检索路由分工 + 安装器 `--search` 初始化选项
 - `2026-09-21-ponytail-integration.md` — L2 资产新增：vendor ponytail 反过度工程规则集（PM/Coder/Reviewer 三角色挂接；完整 pass@1 回归随下一次协议战役）
+- `2026-09-23-diagram-skills-vendoring.md` — L2 资产新增：vendor c4-architecture + mermaid-diagrams（方案 A′：两 skill 判为用户级、经 `.harness/skill-scope.txt` 分发到全部 agent 的用户目录；替换用户级同类 skill；触发冲突已解决，输出位置改造待决）

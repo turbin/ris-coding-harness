@@ -195,19 +195,25 @@ function Get-RelPath([string]$Path) {
 }
 
 # --- Agent skill destinations ---------------------------------------------------
+# User-level skill directories live under the user home: USERPROFILE is the
+# Windows home, HOME the POSIX-style one (Git Bash / MSYS environments).
+$script:UserHome = if ($env:USERPROFILE) { $env:USERPROFILE } elseif ($env:HOME) { $env:HOME } else { $HOME }
+
 $AgentMap = @{
   "claude"    = @{ project = ".claude/skills";   user = ".claude/skills" }
   "pi"        = @{ project = ".pi/skills";       user = ".pi/agent/skills" }
-  "kimi"      = @{ project = ".kimi/skills";     user = ".kimi/skills" }
-  "kimi-code" = @{ project = ".kimi/skills";     user = ".kimi/skills" }
+  "kimi"      = @{ project = ".kimi/skills";     user = ".kimi-code/skills" }
+  "kimi-code" = @{ project = ".kimi/skills";     user = ".kimi-code/skills" }
   "opencode"  = @{ project = ".opencode/skills"; user = ".config/opencode/skills" }
   "codex"     = @{ project = ".codex/skills";    user = ".codex/skills" }
   "agents"    = @{ project = ".agents/skills";   user = ".agents/skills" }
 }
 
-function Get-SkillDest([string]$Name) {
-  $rel = $AgentMap[$Name][$Scope]
-  $prefix = if ($Scope -eq "user") { $HOME } else { $TargetRoot }
+# Print the skills directory for an agent. -UseScope defaults to $Scope.
+function Get-SkillDest([string]$Name, [string]$UseScope) {
+  if (-not $UseScope) { $UseScope = $Scope }
+  $rel = $AgentMap[$Name][$UseScope]
+  $prefix = if ($UseScope -eq "user") { $script:UserHome } else { $TargetRoot }
   return Join-Path $prefix $rel
 }
 
@@ -234,7 +240,7 @@ foreach ($item in $Agent) {
 # .agents/skills is always installed; agent destinations are deduplicated on top.
 $SkillDests = @((Join-Path $TargetRoot ".harness/skills"))
 foreach ($a in $RequestedAgents) {
-  $d = Get-SkillDest $a
+  $d = Get-SkillDest -Name $a -UseScope $Scope
   if ($SkillDests -notcontains $d) { $SkillDests += $d }
 }
 
@@ -269,6 +275,106 @@ try {
     }
     if (-not $SourceRoot -or -not (Test-Path (Join-Path $SourceRoot "templates/project/docs/engineering/index.md"))) {
       Write-Error "Installer templates not found in $Repo@$Ref"
+    }
+  }
+
+  # --- Skill distribution scope (skill-scope.txt) -------------------------------
+  # Repository-level manifest mapping a skill to its distribution scope; skills
+  # not listed default to "project" (installed inside the target project and its
+  # project-local agent directories). "user" skills install into the agent
+  # user-level skill directories instead. Format: <skill> <scope> [agents].
+  $SkillScopeFile = Join-Path $SourceRoot "skill-scope.txt"
+
+  function Get-SkillScope([string]$Skill) {
+    $declared = $null
+    if (Test-Path -LiteralPath $SkillScopeFile) {
+      foreach ($line in (Get-Content -LiteralPath $SkillScopeFile)) {
+        $t = $line.Trim()
+        if (-not $t -or $t.StartsWith("#")) { continue }
+        $f = $t -split '\s+'
+        if ($f.Count -ge 2 -and $f[0] -eq $Skill) {
+          $declared = if ($f[1] -eq "user") { "user" } else { "project" }
+        }
+      }
+    }
+    if (-not $declared) { $declared = "project" }
+    return $declared
+  }
+
+  # Agents a user-level skill targets ("all" when the manifest omits them).
+  function Get-SkillScopeAgents([string]$Skill) {
+    $declared = $null
+    if (Test-Path -LiteralPath $SkillScopeFile) {
+      foreach ($line in (Get-Content -LiteralPath $SkillScopeFile)) {
+        $t = $line.Trim()
+        if (-not $t -or $t.StartsWith("#")) { continue }
+        $f = $t -split '\s+'
+        if ($f.Count -ge 2 -and $f[0] -eq $Skill) {
+          $declared = if ($f.Count -ge 3) { $f[2] } else { "all" }
+        }
+      }
+    }
+    if (-not $declared) { $declared = "all" }
+    return @($declared -split ',')
+  }
+  # User-level destinations of one skill: its manifest agents, narrowed by
+  # -Agent when given.
+  function Get-UserSkillDestinations([string]$Skill) {
+    $dests = @()
+    foreach ($raw in @(Get-SkillScopeAgents $Skill)) {
+      $a = $raw.Trim().ToLowerInvariant()
+      if (-not $a) { continue }
+      $batch = if ($a -eq "all") { @($AgentMap.Keys) } else { @($a) }
+      foreach ($b in $batch) {
+        if (-not $AgentMap.ContainsKey($b)) {
+          [Console]::Error.WriteLine("Unknown agent for skill `"$Skill`": $b (in $SkillScopeFile)")
+          [Console]::Error.WriteLine("Supported agents: $(($AgentMap.Keys | Sort-Object) -join ', '), all")
+          exit 2
+        }
+        if ($RequestedAgents.Count -gt 0 -and $RequestedAgents -notcontains $b) { continue }
+        $d = Get-SkillDest -Name $b -UseScope "user"
+        if ($dests -notcontains $d) { $dests += $d }
+      }
+    }
+    return $dests
+  }
+
+  # Destinations of one skill: user-level skills resolve to agent user
+  # directories, every other skill to the project destinations.
+  function Get-SkillDestinations([string]$Skill) {
+    if ((Get-SkillScope $Skill) -eq "user") { return @(Get-UserSkillDestinations $Skill) }
+    return @($SkillDests)
+  }
+
+  # Create a user-level destination or fail loudly: silently skipping it would
+  # report a successful install while nothing was actually installed.
+  function Initialize-UserDestination([string]$Dest) {
+    try {
+      New-Item -ItemType Directory -Force -Path $Dest -ErrorAction Stop | Out-Null
+    }
+    catch {
+      [Console]::Error.WriteLine("error: cannot write user-level skill directory: $Dest")
+      [Console]::Error.WriteLine("Fix the permissions of `"$script:UserHome`" (or set USERPROFILE/HOME to a writable directory) and re-run the installer.")
+      exit 1
+    }
+  }
+
+  $UserSkillNames = @()
+  $UserSkillDests = @()
+  if (-not $NoSkill) {
+    foreach ($skillDir in (Get-ChildItem (Join-Path $SourceRoot "skills") -Directory)) {
+      if ((Get-SkillScope $skillDir.Name) -ne "user") { continue }
+      $UserSkillNames += $skillDir.Name
+      foreach ($d in @(Get-UserSkillDestinations $skillDir.Name)) {
+        if ($UserSkillDests -notcontains $d) { $UserSkillDests += $d }
+      }
+    }
+    # User-level destinations live under the user home; without it the install
+    # cannot be honest about what it wrote.
+    if ([string]::IsNullOrEmpty($script:UserHome) -and (($UserSkillNames.Count -gt 0) -or ($Scope -eq "user"))) {
+      [Console]::Error.WriteLine("error: HOME is not set; cannot resolve the user-level skill directory under ~/")
+      [Console]::Error.WriteLine("Set USERPROFILE (or HOME) to your home directory and re-run the installer.")
+      exit 1
     }
   }
 
@@ -318,6 +424,11 @@ $($script:BeginMark)
 - `.harness/skills/rsi-loop/SKILL.md` - RSI self-improvement loop. In this project it runs in observe-only self-check mode; the full loop runs only in the harness self-hosted repository.
 - `.harness/skills/ponytail/SKILL.md` - anti-over-engineering ruleset (vendored, MIT): the simplicity ladder (YAGNI -> reuse -> stdlib -> native -> existing dep -> one line -> minimum). The pm-workers Coder and Reviewer roles reference it; invoke directly for coding-task minimalism.
 
+**User-level skills (agent user directories, outside this project)**
+
+- `c4-architecture` (vendored, MIT) - architecture documentation as C4-model Mermaid diagrams (context / container / component / deployment). Scoped user-level in the harness repo's `.harness/skill-scope.txt`, so the installer puts it in this machine's agent user directories (`~/.kimi-code/skills/c4-architecture/`, `~/.claude/skills/c4-architecture/`, `~/.pi/agent/skills/c4-architecture/`, ...) instead of `.harness/skills/` - it is not part of this repository. Invoke it directly when documenting system structure, module boundaries, or deployment topology; write to the project's existing architecture-doc location.
+- `mermaid-diagrams` (vendored, MIT) - Mermaid diagram syntax reference (flow, sequence, class, ERD, state, git graphs, charts) with per-type references, user-level like `c4-architecture` (`~/.kimi-code/skills/mermaid-diagrams/`, `~/.claude/skills/mermaid-diagrams/`, ...), not part of this repository. Invoke directly when a task needs a diagram; architecture documentation (C4) is owned by c4-architecture.
+
 **Engineering rules (decision layer, outside `.harness/`)**
 
 - Start with `docs/engineering/index.md`; load only task-relevant rule files.
@@ -344,7 +455,7 @@ $($script:EndMark)
 $($script:BeginMark)
 ## Harness pointer (managed by ris-coding-harness - do not edit between the markers)
 
-This project is managed by ris-coding-harness. The repository-root `AGENTS.md` is the single routing entry (skills, engineering rules, conventions) - read it instead of duplicating rules here. Required skills live under `.harness/skills/`; gate policy under `.harness/.rsi/policy.yaml`; the managed file list is `.harness/manifest.json`.
+This project is managed by ris-coding-harness. The repository-root `AGENTS.md` is the single routing entry (skills, engineering rules, conventions) - read it instead of duplicating rules here. Required project skills live under `.harness/skills/`; user-level skills live in the agent user directories (not in this repository); gate policy under `.harness/.rsi/policy.yaml`; the managed file list is `.harness/manifest.json`.
 $($script:EndMark)
 "@
   }
@@ -429,9 +540,19 @@ $($script:EndMark)
     New-Item -ItemType Directory -Force -Path $manDir | Out-Null
     $man = Join-Path $manDir "manifest.json"
     $skills = @()
-    Get-ChildItem (Join-Path $SourceRoot "skills") -Directory | ForEach-Object { $skills += $_.Name }
+    $userSkills = @()
+    $scopeMap = [ordered]@{}
+    Get-ChildItem (Join-Path $SourceRoot "skills") -Directory | ForEach-Object {
+      $sc = Get-SkillScope $_.Name
+      $scopeMap[$_.Name] = $sc
+      if ($sc -eq "user") { $userSkills += $_.Name } else { $skills += $_.Name }
+    }
     $dests = @()
     foreach ($d in $SkillDests) { $dests += (Get-RelPath $d) }
+    # User-level skills land outside the target, so their destinations are
+    # recorded as absolute paths.
+    $userDests = @()
+    foreach ($d in $UserSkillDests) { $userDests += $d }
     $files = @()
     foreach ($f in $script:InstalledFiles) {
       if (-not (Test-Path -LiteralPath $f)) { continue }
@@ -444,7 +565,10 @@ $($script:EndMark)
       harness_repo = $Repo
       harness_ref = $Ref
       skills = $skills
+      user_skills = $userSkills
+      skill_scope = $scopeMap
       agent_destinations = $dests
+      user_agent_destinations = $userDests
       files = $files
     }
     $json = $obj | ConvertTo-Json -Depth 5
@@ -498,7 +622,7 @@ $($script:EndMark)
     $SkillsRoot = Join-Path $SourceRoot "skills"
     $failed = $false
     foreach ($skillDir in (Get-ChildItem $SkillsRoot -Directory)) {
-      foreach ($dest in $SkillDests) {
+      foreach ($dest in @(Get-SkillDestinations $skillDir.Name)) {
         $skillPath = Join-Path $dest $skillDir.Name
         $rel = Get-RelPath $skillPath
         if (Test-Path (Join-Path $skillPath "SKILL.md")) {
@@ -586,7 +710,8 @@ $($script:EndMark)
   if (-not $NoSkill) {
     $SkillsRoot = Join-Path $SourceRoot "skills"
     foreach ($skillDir in (Get-ChildItem $SkillsRoot -Directory)) {
-      foreach ($dest in $SkillDests) {
+      foreach ($dest in @(Get-SkillDestinations $skillDir.Name)) {
+        if ((Get-SkillScope $skillDir.Name) -eq "user") { Initialize-UserDestination $dest }
         Install-SkillTo $dest $skillDir.FullName
       }
     }

@@ -10,3 +10,4 @@ Use this file as a lightweight navigation surface. Keep entries concise and poin
 | 2026-09-19 | 2026-09-19-env-mvn-unknown-guidance.md | P3：env 引导 pom.xml UNKNOWN 未写明补救动作 |
 | 2026-09-19 | 2026-09-19-skill-hook-activation-timing.md | P3：skill/hook 生效时机缺文档 |
 | 2026-09-20 | 2026-09-20-hook-payload-cwd-fallback.md | P1：hook payload 缺 cwd 时回退 os.getcwd()，真实归档写进 System32 |
+| 2026-09-23 | 2026-09-23-kimi-user-scope-skill-path.md | P2：kimi/kimi-code 用户级 skill 目录写 `~/.kimi/skills`，实际加载目录是 `~/.kimi-code/skills`（resolved：两侧改为 `~/.kimi-code/skills`，测试覆盖 `--scope user` 与 user 级分发） |

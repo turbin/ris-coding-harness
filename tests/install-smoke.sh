@@ -5,6 +5,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# Isolate the user home for the whole run: the installer installs the skills
+# marked scope=user in .harness/skill-scope.txt into agent user directories, so
+# no test may ever write into the real home. USERPROFILE/KIMI_CODE_HOME are set
+# too because the python hook adapters resolve ~ via those on Windows.
+export HOME="$TMP/home"
+export USERPROFILE="$TMP/home"
+export KIMI_CODE_HOME="$TMP/home/.kimi-code"
+mkdir -p "$HOME"
+
 mkdir -p "$TMP/new" "$TMP/existing"
 printf '%s\n' '{"name":"existing-demo"}' > "$TMP/existing/package.json"
 
@@ -27,7 +36,32 @@ test -f "$TMP/new/.harness/.rsi/policy.yaml"
 test -f "$TMP/new/.harness/manifest.json"
 grep -q '"schema_version"' "$TMP/new/.harness/manifest.json"
 grep -q '"sha256"' "$TMP/new/.harness/manifest.json"
+# Manifest records the two scopes: project skills, user skills, and where the
+# user-level ones landed (absolute paths outside the target).
+if grep -q '"skills": \[[^]]*c4-architecture' "$TMP/new/.harness/manifest.json"; then
+  echo "install smoke test: FAIL (user-level skill listed as a project skill)" >&2
+  exit 1
+fi
+grep -q '"user_skills": \["c4-architecture","mermaid-diagrams"\]' "$TMP/new/.harness/manifest.json"
+grep -q '"skill_scope": {"c4-architecture": "user","mermaid-diagrams": "user"' "$TMP/new/.harness/manifest.json"
+grep -qF "\"user_agent_destinations\": [\"$HOME/.claude/skills\"" "$TMP/new/.harness/manifest.json"
+grep -qF "$HOME/.kimi-code/skills" "$TMP/new/.harness/manifest.json"
 test -d "$TMP/new/evals/results"
+
+# Both vendored diagram skills are user-level (.harness/skill-scope.txt): they
+# land in the agent user directories and never inside the project.
+test ! -e "$TMP/new/.harness/skills/c4-architecture"
+test ! -e "$TMP/new/.harness/skills/mermaid-diagrams"
+for d in .claude/skills .pi/agent/skills .kimi-code/skills .config/opencode/skills .codex/skills .agents/skills; do
+  test -f "$HOME/$d/c4-architecture/SKILL.md"
+  test -f "$HOME/$d/mermaid-diagrams/SKILL.md"
+done
+# The old kimi home is no longer used.
+test ! -e "$HOME/.kimi"
+# The managed section registers them as user-level and names their real homes.
+grep -q 'User-level skills' "$TMP/new/AGENTS.md"
+grep -q -- '~/.kimi-code/skills/c4-architecture/' "$TMP/new/AGENTS.md"
+grep -q -- '~/.claude/skills/mermaid-diagrams/' "$TMP/new/AGENTS.md"
 
 # Search routing (default --search zvec): managed AGENTS section carries the
 # zvec-first fuzzy-search routing block.
@@ -57,7 +91,8 @@ printf '%s\n' '# local customization' > "$TMP/existing/docs/engineering/coding.m
 "$ROOT/install.sh" --target "$TMP/existing" --mode adopt --no-git >/dev/null
 grep -q '^# local customization$' "$TMP/existing/docs/engineering/coding.md"
 
-# --agent distributes the skill to each requested agent directory (plus canonical .harness).
+# --agent distributes the project skills to each requested agent directory
+# (plus canonical .harness); user-level skills stay in the user directories.
 mkdir -p "$TMP/multi"
 "$ROOT/install.sh" --target "$TMP/multi" --mode auto --no-git --agent claude,opencode,codex >/dev/null
 test -f "$TMP/multi/.harness/skills/pm-workers-engineering/SKILL.md"
@@ -66,6 +101,9 @@ test -f "$TMP/multi/.claude/skills/pm-workers-engineering/SKILL.md"
 test -f "$TMP/multi/.claude/skills/rsi-loop/SKILL.md"
 test -f "$TMP/multi/.opencode/skills/pm-workers-engineering/SKILL.md"
 test -f "$TMP/multi/.codex/skills/pm-workers-engineering/SKILL.md"
+test ! -e "$TMP/multi/.claude/skills/c4-architecture"
+test ! -e "$TMP/multi/.opencode/skills/mermaid-diagrams"
+test ! -e "$TMP/multi/.codex/skills/c4-architecture"
 
 # Repeated --agent flags accumulate; uppercase and empty segments tolerated.
 mkdir -p "$TMP/repeat"
@@ -93,6 +131,10 @@ test ! -e "$CHECK_ABSENT"
 out="$("$ROOT/install.sh" --target "$TMP/new" --check 2>&1)"
 printf '%s\n' "$out" | grep -q 'ok         .harness/.rsi/policy.yaml'
 printf '%s\n' "$out" | grep -q 'AGENTS.md managed section'
+# ... and reports the user-level copies in the agent user directories.
+printf '%s\n' "$out" | grep -q "ok         $HOME/.kimi-code/skills/c4-architecture"
+printf '%s\n' "$out" | grep -q "ok         $HOME/.claude/skills/mermaid-diagrams"
+printf '%s\n' "$out" | grep -q "ok         $HOME/.pi/agent/skills/c4-architecture"
 
 # --check --agent flags a destination that was never installed.
 if out="$("$ROOT/install.sh" --target "$TMP/new" --check --agent claude 2>&1)"; then
@@ -113,6 +155,40 @@ printf '%s\n' "$out" | grep -q 'incomplete'
 "$ROOT/install.sh" --target "$TMP/existing" --check >/dev/null
 grep -q '^# local customization$' "$TMP/existing/docs/engineering/coding.md"
 
+# A missing user-level copy (deleted SKILL.md) is detected, then healed by a
+# re-run; the project side stays untouched.
+rm "$HOME/.codex/skills/c4-architecture/SKILL.md"
+if out="$("$ROOT/install.sh" --target "$TMP/new" --check 2>&1)"; then
+  echo "install smoke test: FAIL (--check missed incomplete user-level skill)" >&2
+  exit 1
+fi
+printf '%s\n' "$out" | grep -q "incomplete $HOME/.codex/skills/c4-architecture"
+"$ROOT/install.sh" --target "$TMP/new" --mode adopt --no-git >/dev/null
+test -f "$HOME/.codex/skills/c4-architecture/SKILL.md"
+test ! -e "$TMP/new/.harness/skills/c4-architecture"
+
+# A user-level copy that is entirely absent is reported missing (exit 1).
+mv "$HOME/.agents/skills/mermaid-diagrams" "$HOME/mermaid-diagrams-away"
+if out="$("$ROOT/install.sh" --target "$TMP/new" --check 2>&1)"; then
+  echo "install smoke test: FAIL (--check missed missing user-level skill)" >&2
+  exit 1
+fi
+printf '%s\n' "$out" | grep -q "missing    $HOME/.agents/skills/mermaid-diagrams"
+"$ROOT/install.sh" --target "$TMP/new" --mode adopt --no-git >/dev/null
+test -f "$HOME/.agents/skills/mermaid-diagrams/SKILL.md"
+test ! -e "$TMP/new/.harness/skills/mermaid-diagrams"
+
+# --agent narrows the user-level install: only the requested agent's user
+# directory is written for those skills.
+NARROW_HOME="$TMP/narrowhome"; mkdir -p "$NARROW_HOME" "$TMP/narrowproj"
+HOME="$NARROW_HOME" USERPROFILE="$NARROW_HOME" KIMI_CODE_HOME="$NARROW_HOME/.kimi-code" \
+  "$ROOT/install.sh" --target "$TMP/narrowproj" --mode adopt --no-git --agent claude --skip-env >/dev/null
+test -f "$NARROW_HOME/.claude/skills/c4-architecture/SKILL.md"
+test ! -e "$NARROW_HOME/.codex"
+test ! -e "$NARROW_HOME/.kimi-code"
+HOME="$NARROW_HOME" USERPROFILE="$NARROW_HOME" KIMI_CODE_HOME="$NARROW_HOME/.kimi-code" \
+  "$ROOT/install.sh" --target "$TMP/narrowproj" --check --agent claude >/dev/null
+
 # --check and --no-skill are mutually exclusive.
 if "$ROOT/install.sh" --target "$TMP/new" --check --no-skill >/dev/null 2>&1; then
   echo "install smoke test: FAIL (--check accepted with --no-skill)" >&2
@@ -127,9 +203,15 @@ rc=0; "$ROOT/install.sh" --agent >/dev/null 2>&1 || rc=$?
 
 # --scope user installs agent skills under $HOME (project stays untouched except canonical).
 FAKEHOME="$TMP/fakehome"; mkdir -p "$FAKEHOME" "$TMP/userproj"
-HOME="$FAKEHOME" "$ROOT/install.sh" --target "$TMP/userproj" --mode adopt --no-git --scope user --agent claude >/dev/null
+HOME="$FAKEHOME" USERPROFILE="$FAKEHOME" KIMI_CODE_HOME="$FAKEHOME/.kimi-code" \
+  "$ROOT/install.sh" --target "$TMP/userproj" --mode adopt --no-git --scope user \
+  --agent claude,kimi-code --skip-env >/dev/null
 test -f "$FAKEHOME/.claude/skills/pm-workers-engineering/SKILL.md"
 test ! -e "$TMP/userproj/.claude"
+# kimi/kimi-code resolve to the Kimi Code home, not the retired ~/.kimi.
+test -f "$FAKEHOME/.kimi-code/skills/pm-workers-engineering/SKILL.md"
+test -f "$FAKEHOME/.kimi-code/skills/c4-architecture/SKILL.md"
+test ! -e "$FAKEHOME/.kimi/skills"
 
 # Env bootstrap: dry-run records the setup-env command but must not execute it.
 mkdir -p "$TMP/envtest/scripts"
