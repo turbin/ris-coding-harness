@@ -143,5 +143,35 @@ class GoldenClassification(unittest.TestCase):
                 self.assertEqual(out["terminal_state"], expected)
 
 
+class Reflectability(unittest.TestCase):
+    def test_success_not_actionable(self):
+        out = run_cli(base_doc(acceptance_evidence="passed"))
+        self.assertEqual(out["reflectability"],
+                         {"actionable": False, "recoverable": False,
+                          "agent_controllable": "unknown"})
+
+    def test_infra_not_controllable(self):
+        out = run_cli(base_doc(runtime_error="fatal", fatal_error_origin="external"))
+        self.assertEqual(out["reflectability"],
+                         {"actionable": False, "recoverable": False,
+                          "agent_controllable": False})
+
+    def test_task_failure_implementation_error_actionable(self):
+        out = run_cli(base_doc(acceptance_evidence="failed",
+                               failure_category="implementation_error"))
+        self.assertEqual(out["reflectability"],
+                         {"actionable": True, "recoverable": True,
+                          "agent_controllable": True})
+
+    def test_task_failure_environment_category_not_controllable(self):
+        out = run_cli(base_doc(user_action="rejection", failure_category="environment"))
+        self.assertEqual(out["reflectability"]["agent_controllable"], False)
+        self.assertTrue(out["reflectability"]["actionable"])
+
+    def test_indeterminate_unknown(self):
+        out = run_cli(base_doc())
+        self.assertEqual(out["reflectability"]["agent_controllable"], "unknown")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

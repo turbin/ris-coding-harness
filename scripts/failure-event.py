@@ -69,6 +69,21 @@ def classify(signals):
     return "indeterminate"
 
 
+def reflectability(state, signals):
+    if state == "task_failure":
+        controllable = not (
+            signals.get("failure_category") == "environment"
+            or signals.get("fatal_error_origin") in ("external", "harness")
+        )
+        return {"actionable": True, "recoverable": True,
+                "agent_controllable": controllable}
+    if state == "infra_failure":
+        return {"actionable": False, "recoverable": False,
+                "agent_controllable": False}
+    return {"actionable": False, "recoverable": False,
+            "agent_controllable": "unknown"}
+
+
 def main():
     try:
         raw = sys.stdin.read()
@@ -78,7 +93,8 @@ def main():
         state = classify(signals)
         if state not in TERMINAL_STATES:
             raise ValueError(f"invalid state: {state}")
-        out = {"ok": True, "terminal_state": state}
+        out = {"ok": True, "terminal_state": state,
+               "reflectability": reflectability(state, signals)}
     except Exception as exc:  # fail-open
         out = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     json.dump(out, sys.stdout, sort_keys=True, separators=(",", ":"),
