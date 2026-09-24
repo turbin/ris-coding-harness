@@ -173,5 +173,27 @@ class Reflectability(unittest.TestCase):
         self.assertEqual(out["reflectability"]["agent_controllable"], "unknown")
 
 
+class FailureEventId(unittest.TestCase):
+    def test_deterministic_same_input(self):
+        a = run_cli(base_doc())
+        b = run_cli(base_doc())
+        self.assertEqual(a["failure_event_id"], b["failure_event_id"])
+        self.assertRegex(a["failure_event_id"], r"^fe_[0-9a-f]{16}$")
+
+    def test_terminal_sequence_separates_events(self):
+        a = run_cli(base_doc())
+        doc = base_doc()
+        doc["terminal_sequence"] = 2
+        b = run_cli(doc)
+        self.assertNotEqual(a["failure_event_id"], b["failure_event_id"])
+
+    def test_run_id_separates_events(self):
+        a = run_cli(base_doc())
+        doc = base_doc()
+        doc["run_id"] = "R2"
+        b = run_cli(doc)
+        self.assertNotEqual(a["failure_event_id"], b["failure_event_id"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

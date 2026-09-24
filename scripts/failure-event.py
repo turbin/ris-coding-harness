@@ -8,6 +8,7 @@ failure_event/v1 JSON document to stdout. Fail-open by contract
 
 Spec: decisions/2026-09-24-failure-reflection-loop.md
 """
+import hashlib
 import json
 import sys
 
@@ -84,6 +85,25 @@ def reflectability(state, signals):
             "agent_controllable": "unknown"}
 
 
+def canonical(obj):
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=True)
+
+
+def sha_hex(obj):
+    return hashlib.sha256(canonical(obj).encode("utf-8")).hexdigest()
+
+
+def failure_event_id(doc):
+    return "fe_" + sha_hex({
+        "v": "fe/v1",
+        "run_id": doc.get("run_id"),
+        "task_id": doc.get("task_id"),
+        "attempt": doc.get("attempt"),
+        "terminal_sequence": doc.get("terminal_sequence"),
+    })[:16]
+
+
 def main():
     try:
         raw = sys.stdin.read()
@@ -94,7 +114,8 @@ def main():
         if state not in TERMINAL_STATES:
             raise ValueError(f"invalid state: {state}")
         out = {"ok": True, "terminal_state": state,
-               "reflectability": reflectability(state, signals)}
+               "reflectability": reflectability(state, signals),
+               "failure_event_id": failure_event_id(doc)}
     except Exception as exc:  # fail-open
         out = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     json.dump(out, sys.stdout, sort_keys=True, separators=(",", ":"),
