@@ -120,3 +120,11 @@ R8 正式实验需第三臂（generic retry）分离「额外算力」与「结�
 - opencode 不在本轮四家范围，共享管道后续补适配行。
 - `fast-stop-gate` 配置形态、并发锁方案：按各自升级条件另行立项。
 - 风险 R8 的三臂实验设计属 eval 层，随 M10 一并展开。
+
+## 实施记录
+
+- M0（2026-09-24）：`scripts/failure-event.py` + `tests/test-failure-event.py` +
+  `tests/failure-event-smoke.sh` 落地。A1 判定表 23 案例、reflectability 派生、
+  fe/v1 / rf/v1 / rs/v1 三级身份与成对 golden、三连跑确定性全部通过
+  （27 个测试方法，unittest 输出 `OK`）。
+  验收：`bash tests/failure-event-smoke.sh` → 0。
