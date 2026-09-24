@@ -930,3 +930,13 @@ git commit -m "test: failure-event smoke 入口与 M0 实施记录"
 1. **Spec 覆盖**：DEC-FR-001 五态 → Task 1/2；DEC-FAILURE-AUTHORITY 权威链 → 分类 1–9 顺序；DEC-FINGERPRINT 三级身份 → Task 4/5/6（含成对 golden）；A1 表 18 行 + 先例守卫 → Task 2（23 案例）；fail-open → 契约测试；M0 验收「输出稳定」→ Task 6 三连跑。DEC-FAST-GATE 明确不实现（无任务，符合裁决）。
 2. **占位符扫描**：无 TBD/TODO；两处标注的测试残留行已写明删除动作。
 3. **类型一致性**：输出键 `terminal_state` / `reflectability` / `failure_event_id` / `fingerprints.{reflection,recurrence}` 与契约节一致；`rf/v1`、`rs/v1`、`fe/v1` 版本串全局一致。
+
+---
+
+## M0 终审契约修订（2026-09-24，全分支评审后裁定，合并前生效）
+
+1. **恒 exit 0 补强**：stdout 写入/flush 阶段的 `OSError`（如 broken pipe）必须被捕获并以 0 退出——实现采用 try 内 `json.dump`+`flush` 捕获后 `os._exit(0)`，跳过解释器退出期的 flush。探针已复现旧行为 exit 120，违反 Global Constraints。
+2. **身份字段必填**：`run_id`/`task_id`/`attempt`/`terminal_sequence` 缺失或为 null → `{"ok": false, "error": ...}`（仍 exit 0）；空 stdin 同样 `ok:false`。防止全 null 输入共享同一 `failure_event_id` 削弱 DEC-FR-014 对账地基。
+3. **`line` 类型归一**：rf 哈希输入把数字字符串 `line` 归一为 int（`"183"` ≡ `183`）。
+4. **rs/v1 路径归并扩展**（M1 归档冻结前最后窗口）：`normalize_recurrence` 在 strip_noise + 剥行号之后必须归并——(a) 左边界允许引号/`(` 的绝对 unix 路径；(b) strip_noise 残留的 `<HOME>…`/`<TMP>…` 前缀段；(c) 含至少一个 `/` 或 `\` 分隔且带扩展名的相对路径 token——一律归并为 basename。成对 golden 增加三组（引号对、home 残留对、相对路径对），均断言 rf≠、rs=；既有六对断言不变。
+5. 文案同步：`scripts/failure-event.py` 中 “lands in Task 2” 过时注释改写为历史表述；计划 Task 2 Interfaces「21 案例」笔误改 23；decisions 实施记录补「A1 判定表 18 行场景 + 先例守卫 = 23 案例」说明。
