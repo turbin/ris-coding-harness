@@ -15,6 +15,7 @@ STRICT_ENV=0
 AGENTS_LIST=""
 SCOPE="project"
 SEARCH="zvec"
+GRAPHIFY="auto"
 INSTALLED_FILES=""
 BEGIN_MARK='<!-- ris-coding-harness:begin -->'
 END_MARK='<!-- ris-coding-harness:end -->'
@@ -46,6 +47,13 @@ Options:
                          the search-routing section into AGENTS.md and
                          provisions the zg CLI (npm -g @zvec/zvec-grep) when
                          missing; off skips both
+  --graphify auto|on|off graphify scale gate (default: auto). auto keeps the
+                         graphify routing when the project has at most the
+                         file-count threshold (.harness/graphify-threshold.txt,
+                         483) and replaces it with an explicit disable above;
+                         on/off force the decision. The graphify item sits in
+                         the search-routing block, so --search off also skips
+                         it; the manifest records the decision either way
   -h, --help             Show this help
 
 Modes:
@@ -88,6 +96,7 @@ while [ "$#" -gt 0 ]; do
     --agent) require_value "$1" "${2:-}"; AGENTS_LIST="${AGENTS_LIST:+$AGENTS_LIST,}$2"; shift 2 ;;
     --scope) require_value "$1" "${2:-}"; SCOPE="$2"; shift 2 ;;
     --search) require_value "$1" "${2:-}"; SEARCH="$2"; shift 2 ;;
+    --graphify) require_value "$1" "${2:-}"; GRAPHIFY="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -96,6 +105,7 @@ done
 case "$MODE" in auto|init|adopt) ;; *) echo "Invalid mode: $MODE" >&2; exit 2 ;; esac
 case "$SCOPE" in project|user) ;; *) echo "Invalid scope: $SCOPE" >&2; exit 2 ;; esac
 case "$SEARCH" in zvec|off) ;; *) echo "Invalid search: $SEARCH (want zvec|off)" >&2; exit 2 ;; esac
+case "$GRAPHIFY" in auto|on|off) ;; *) echo "Invalid graphify: $GRAPHIFY (want auto|on|off)" >&2; exit 2 ;; esac
 
 if [ "$CHECK" -eq 1 ] && [ "$INSTALL_SKILL" -eq 0 ]; then
   echo "--check and --no-skill are mutually exclusive" >&2
@@ -162,6 +172,51 @@ else
   fi
   [ -f "$SOURCE_ROOT/templates/project/docs/engineering/index.md" ] || { echo "Installer templates not found in $REPO@$REF" >&2; exit 1; }
 fi
+
+# --- graphify scale gate (.harness/graphify-threshold.txt) ----------------------
+# Repository-level config, read from the source tree (not installed into the
+# target): a project whose file count is at or below the threshold keeps the
+# graphify routing; above it the topology is unreliable and the managed routing
+# replaces graphify with an explicit disable. A missing or invalid value falls
+# back to the built-in default. Format: "# comments", "metric: files",
+# "threshold: <N>".
+GRAPHIFY_THRESHOLD_FILE="$SOURCE_ROOT/graphify-threshold.txt"
+DEFAULT_GRAPHIFY_THRESHOLD=483
+DEFAULT_GRAPHIFY_METRIC=files
+
+graphify_conf() {
+  [ -f "$GRAPHIFY_THRESHOLD_FILE" ] || return 1
+  v="$(awk -v key="$1:" '$1 == key { print $2; exit }' "$GRAPHIFY_THRESHOLD_FILE")"
+  [ -n "$v" ] || return 1
+  printf '%s\n' "$v"
+}
+
+graphify_threshold() {
+  v="$(graphify_conf threshold || true)"
+  case "$v" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s\n' "$v"
+}
+
+# Directories that never count towards the project scale: dependencies, build
+# output, caches, and the local indexes of the retrieval tools themselves.
+GRAPHIFY_IGNORED_DIRS=".git node_modules .venv venv target build dist out __pycache__ .next .gradle .idea .cache .zvec-grep .codegraph"
+
+# File count for a git project (tracked + untracked-but-unignored), otherwise a
+# pruned file walk. Untracked files must count: a freshly `git init`ed project has
+# an empty index, and counting only tracked files reported 0 — flipping the
+# decision back to "on" on every re-run.
+count_project_files() {
+  root="$1"
+  if [ -e "$root/.git" ] && command -v git >/dev/null 2>&1; then
+    git -C "$root" ls-files --cached --others --exclude-standard 2>/dev/null | wc -l | tr -d ' '
+    return 0
+  fi
+  prune=""
+  for d in $GRAPHIFY_IGNORED_DIRS; do
+    prune="$prune -name $d -o"
+  done
+  find "$root" -mindepth 1 \( $prune -false \) -prune -o -type f -print 2>/dev/null | wc -l | tr -d ' '
+}
 
 managed_copy() {
   src="$1"
@@ -423,8 +478,34 @@ build_agents_section() {
   On first use run `zg status`, then `zg index` if missing (storage lives in
   `.zvec-grep/`, git-ignored); refresh with `zg index` after large changes.
 - Exact string/symbol lookups: native Grep/Glob (or `zg query --rg`).
+ROUTING
+    g_dec="${GRAPHIFY_DECISION:-on}"
+    g_val="${GRAPHIFY_VALUE:-0}"
+    g_thr="${GRAPHIFY_THRESHOLD:-0}"
+    g_cmp="${GRAPHIFY_CMP:-<=}"
+    if [ "$g_dec" = "on" ]; then
+      cat >> "$srch_tmp" <<'ROUTING'
 - Structure, relationships, architecture: `graphify` when `graphify-out/`
   exists; call graphs and blast radius: CodeGraph (`.codegraph/`).
+ROUTING
+      if [ "$g_cmp" = "<=" ]; then
+        printf -- '- graphify is enabled for this project (%s files <= threshold %s) —\n' "$g_val" "$g_thr" >> "$srch_tmp"
+      else
+        printf -- '- graphify is enabled for this project (%s files > threshold %s; forced by --graphify on)\n' "$g_val" "$g_thr" >> "$srch_tmp"
+      fi
+      printf -- '  run `graphify update .` before the first structural query.\n' >> "$srch_tmp"
+    else
+      cat >> "$srch_tmp" <<'ROUTING'
+- Structure/architecture queries: graphify is **DISABLED** for this project
+ROUTING
+      printf -- '  (%s files > threshold %s) — its topology is unreliable at that scale\n' "$g_val" "$g_thr" >> "$srch_tmp"
+      cat >> "$srch_tmp" <<'ROUTING'
+  (decision in `decisions/`); do not use graphify and do not build
+  `graphify-out/`. Use `zg query` (semantic retrieval) + CodeGraph (call graphs
+  / blast radius) instead; use `zg` for cross-document semantics.
+ROUTING
+    fi
+    cat >> "$srch_tmp" <<'ROUTING'
 - Verify retrieved evidence with native tools before editing.
 ROUTING
   fi
@@ -442,6 +523,7 @@ ROUTING
 
 - `c4-architecture` (vendored, MIT) — architecture documentation as C4-model Mermaid diagrams (context / container / component / deployment). Scoped user-level in the harness repo's `.harness/skill-scope.txt`, so the installer puts it in this machine's agent user directories (`~/.kimi-code/skills/c4-architecture/`, `~/.claude/skills/c4-architecture/`, `~/.pi/agent/skills/c4-architecture/`, …) instead of `.harness/skills/` — it is not part of this repository. Invoke it directly when documenting system structure, module boundaries, or deployment topology; write to the project's existing architecture-doc location.
 - `mermaid-diagrams` (vendored, MIT) — Mermaid diagram syntax reference (flow, sequence, class, ERD, state, git graphs, charts) with per-type references, user-level like `c4-architecture` (`~/.kimi-code/skills/mermaid-diagrams/`, `~/.claude/skills/mermaid-diagrams/`, …), not part of this repository. Invoke directly when a task needs a diagram; architecture documentation (C4) is owned by c4-architecture.
+- `architecture-topology` (homegrown) — on-demand architecture-topology synthesis with a dated disk cache (`docs/architecture/topology.md`: module map, dependency direction, hubs, key paths), user-level like the two skills above. Invoke it for module / hub / dependency-direction / reachability questions on projects where the scale gate disabled graphify; it never replaces CodeGraph for code-level call paths.
 
 **Engineering rules (decision layer, outside `.harness/`)**
 
@@ -641,6 +723,8 @@ EOF_FILES
     printf '  \"skill_scope\": {%s},\n' "$scope_json"
     printf '  \"agent_destinations\": [%s],\n' "$dests_json"
     printf '  \"user_agent_destinations\": [%s],\n' "$user_dests_json"
+    printf '  \"graphify\": {\"decision\": \"%s\", \"metric\": \"%s\", \"value\": %s, \"threshold\": %s, \"source\": \"%s\"},\n' \
+      "$GRAPHIFY_DECISION" "$GRAPHIFY_METRIC" "$GRAPHIFY_VALUE" "$GRAPHIFY_THRESHOLD" "$GRAPHIFY_SOURCE"
     printf '  \"files\": [\n%s\n  ]\n' "$entries"
     printf '}\n'
   } > "$tmp" && mv "$tmp" "$man"
@@ -693,6 +777,30 @@ if [ "$CHECK" -eq 1 ]; then
 fi
 
 echo "Project bootstrap: mode=$MODE target=$TARGET"
+
+# graphify scale gate: the project's own file count (measured before this run
+# writes anything) decides whether the managed routing keeps graphify.
+GRAPHIFY_THRESHOLD="$(graphify_threshold || true)"
+if [ -z "$GRAPHIFY_THRESHOLD" ]; then
+  GRAPHIFY_THRESHOLD="$DEFAULT_GRAPHIFY_THRESHOLD"
+  echo "warn   $GRAPHIFY_THRESHOLD_FILE missing or invalid; using the built-in graphify threshold $GRAPHIFY_THRESHOLD" >&2
+fi
+GRAPHIFY_METRIC="$(graphify_conf metric || true)"
+[ -n "$GRAPHIFY_METRIC" ] || GRAPHIFY_METRIC="$DEFAULT_GRAPHIFY_METRIC"
+GRAPHIFY_VALUE="$(count_project_files "$TARGET")"
+if [ "$GRAPHIFY_VALUE" -le "$GRAPHIFY_THRESHOLD" ]; then
+  GRAPHIFY_CMP="<="
+else
+  GRAPHIFY_CMP=">"
+fi
+if [ "$GRAPHIFY" = "auto" ]; then
+  GRAPHIFY_SOURCE="auto"
+  if [ "$GRAPHIFY_CMP" = "<=" ]; then GRAPHIFY_DECISION="on"; else GRAPHIFY_DECISION="off"; fi
+else
+  GRAPHIFY_SOURCE="flag"
+  GRAPHIFY_DECISION="$GRAPHIFY"
+fi
+echo "graphify $GRAPHIFY_DECISION ($GRAPHIFY_VALUE files $GRAPHIFY_CMP $GRAPHIFY_THRESHOLD)"
 
 SECTION_TMP="$(mktemp)"
 build_agents_section > "$SECTION_TMP"

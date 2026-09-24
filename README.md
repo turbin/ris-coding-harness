@@ -77,6 +77,11 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -Target . -Mode adopt
 --scope project|user   agent 目录的作用域：工程内 / 用户主目录（默认 project）
 --search zvec|off      工程检索路由（默认 zvec）：zvec 向 AGENTS.md 注入检索分工段，
                        并在 zg CLI 缺失时经 npm 安装 @zvec/zvec-grep；off 两者都跳过
+--graphify auto|on|off graphify 规模门（默认 auto）：auto 按工程文件数阈值
+                       （.harness/graphify-threshold.txt，483）判定——不高于阈值保留
+                       graphify 路由，高于阈值换成显式禁用文案；on/off 强制指定。
+                       graphify 条目位于检索分工段内，故 --search off 会一并跳过它，
+                       但 manifest 与输出结论仍记录判定结果
 -h, --help             查看完整帮助
 ```
 
@@ -86,7 +91,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1 -Target . -Mode adopt
 |---|---|
 | 0 | 安装成功（env 阶段失败默认不改变退出码） |
 | 1 | `--check` 检测到 skill 缺失/不完整；或用户级 Skill 的落点不可用（HOME/USERPROFILE 未设置或不可写） |
-| 2 | 用法错误（未知选项、缺参数值、非法 `--mode`/`--scope`/`--search`、`--check` 与 `--no-skill` 同用） |
+| 2 | 用法错误（未知选项、缺参数值、非法 `--mode`/`--scope`/`--search`/`--graphify`、`--check` 与 `--no-skill` 同用） |
 | 3 | `--strict-env` 下环境依赖构建失败 |
 
 注：PowerShell 参数绑定错误（如 `-Target` 缺值）由运行时产生，退出码为 1，属已知偏差；其余用法错误两侧均为 2。
@@ -145,7 +150,7 @@ curl -fsSL https://raw.githubusercontent.com/turbin/ris-coding-harness/main/inst
 
 ### 必需 Skill 自检与自愈
 
-安装器把源仓库 `skills/` 下的每个目录视为必需 Skill（当前为 `pm-workers-engineering`、`ponytail`、`rsi-loop`、`c4-architecture`、`mermaid-diagrams`）。`--check`（PowerShell 为 `-Check`）只检测不写入：`project` 级 Skill 查工程内目标，`user` 级 Skill 改查其用户级目录（未指定 `--agent` 时按 `.harness/skill-scope.txt` 的 `agents` 列解析，`all` 展开为全部），逐项输出 `ok` / `incomplete` / `missing` 状态行；全部齐备退出码 0，有缺失退出码 1 并打印修复命令，参数错误（如与 `--no-skill` 同用）退出码 2。用户级目标在输出中显示为绝对路径（如 `~/.kimi-code/skills/c4-architecture`）。
+安装器把源仓库 `skills/` 下的每个目录视为必需 Skill（当前为 `pm-workers-engineering`、`ponytail`、`rsi-loop`、`c4-architecture`、`mermaid-diagrams`、`architecture-topology`）。`--check`（PowerShell 为 `-Check`）只检测不写入：`project` 级 Skill 查工程内目标，`user` 级 Skill 改查其用户级目录（未指定 `--agent` 时按 `.harness/skill-scope.txt` 的 `agents` 列解析，`all` 展开为全部），逐项输出 `ok` / `incomplete` / `missing` 状态行；全部齐备退出码 0，有缺失退出码 1 并打印修复命令，参数错误（如与 `--no-skill` 同用）退出码 2。用户级目标在输出中显示为绝对路径（如 `~/.kimi-code/skills/c4-architecture`）。
 
 ```bash
 ./install.sh --target . --check                  # 工程内目标 + 用户级目录
@@ -177,6 +182,18 @@ Skill 目录不完整（如 `SKILL.md` 被删）时，直接重跑安装器即�
 - **结构/关系/架构** → graphify（`graphify-out/` 存在时）；调用链/影响面 → CodeGraph。
 
 `--search off` 跳过路由注入与 env 阶段的 zvec 探测/安装，生成内容与旧版一致。本机 workspace 层的分工约定见 `E:\workspace\AGENTS.md` 的 Search routing 节。
+
+### graphify 规模门（`--graphify`，默认 auto）
+
+graphify 的拓扑在过大工程上不可信（实测反例见 `decisions/2026-09-23-graphify-scale-gate.md`），因此初始化阶段按**工程规模**决定是否保留 graphify 路由：
+
+- **口径 = 文件数**：有 `.git` 时取 `git ls-files | wc -l`；无 `.git` 时遍历文件并按忽略清单剪枝（`.git`、`node_modules`、`.venv`、`venv`、`target`、`build`、`dist`、`out`、`__pycache__`、`.next`、`.gradle`、`.idea`、`.cache`、`.zvec-grep`、`.codegraph`）；
+- **阈值 483**：锚点工程 `zotero-plugin-ai4paper`（2026-09-23 全工作区实测中位），落在仓库级配置 `.harness/graphify-threshold.txt`（纯文本、可 grep、`#` 注释）。安装器读该文件取值，文件缺失或值非法时回退内置默认 483 并在 stderr 告警——改阈值只改这个文件；
+- **判定**：文件数 ≤ 阈值 → 路由段保留 graphify 一行并提示首次使用前执行 `graphify update .`；> 阈值 → 换成显式禁用文案（不要使用 graphify、不要构建 `graphify-out/`，结构类查询改用 `zg query` + CodeGraph）；
+- **覆盖开关**：`--graphify on|off`（PowerShell 侧 `-Graphify`）强制判定，manifest 记 `source: "flag"`；非法值退出码 2；
+- **三处落点**：① `AGENTS.md` 受管路由段；② `.harness/manifest.json` 的 `graphify` 块 `{decision, metric, value, threshold, source}`；③ 安装输出一行结论（如 `graphify off (500 files > 483)`）。
+
+graphify 条目与 zvec 分工同属一个注入块，所以 `--search off` 时整块不注入、graphify 路由随之跳过；manifest 块与输出结论不受 `--search` 影响，始终记录。计数发生在本次安装写入之前，判断的是工程自身的规模而非 harness 落位后的文件数。
 
 ### run-loop headless 支持矩阵
 
@@ -231,6 +248,8 @@ docs/engineering/                # 当前工程自己的特殊规则
                                          # SKILL.md + references/（c4-syntax / common-mistakes / advanced-patterns）
 ~/.claude/skills/mermaid-diagrams/       # Mermaid 图语法参考（同一 vendor）：图类型选择 + 通用语法与最佳实践
                                          # references/（flowchart / sequence / class / ERD / 基础设施与部署图 / 高级特性）
+~/.kimi-code/skills/architecture-topology/  # 按需拓扑合成 + 落盘缓存（homegrown，来源见 ORIGIN.md）
+                                         # SKILL.md + scripts/mermaid-check.js；规模门禁用 graphify 的工程用它补拓扑
                                          # 其余 agent（pi / opencode / codex / agents）为对应用户目录，见上文映射表
 ```
 

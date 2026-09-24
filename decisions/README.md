@@ -12,3 +12,5 @@ RSI 闭环 MUTATE 环节（`docs/rsi-design.md` §4.4）的审计轨迹：
 - `2026-09-20-zvec-search-routing.md` — L3 资产新增：zvec 检索路由分工 + 安装器 `--search` 初始化选项
 - `2026-09-21-ponytail-integration.md` — L2 资产新增：vendor ponytail 反过度工程规则集（PM/Coder/Reviewer 三角色挂接；完整 pass@1 回归随下一次协议战役）
 - `2026-09-23-diagram-skills-vendoring.md` — L2 资产新增：vendor c4-architecture + mermaid-diagrams（方案 A′：两 skill 判为用户级、经 `.harness/skill-scope.txt` 分发到全部 agent 的用户目录；替换用户级同类 skill；触发冲突已解决，输出位置改造待决）
+- `2026-09-23-graphify-scale-gate.md` — L3 资产新增：init/adopt 按工程文件数（阈值 483，`.harness/graphify-threshold.txt`）判定 graphify 启用/禁用 + 安装器 `--graphify auto|on|off`
+- `2026-09-23-topology-synthesis.md` — L2 资产新增：architecture-topology 按需拓扑合成 + 落盘缓存（user 级，规模门禁用 graphify 的工程的 fallback）

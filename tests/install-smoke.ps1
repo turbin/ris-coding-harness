@@ -62,7 +62,9 @@ try {
   # user-level ones landed (absolute paths outside the target).
   $manifest = Get-Content (Join-Path $New ".harness/manifest.json") -Raw
   Assert-True ($manifest -notmatch '"skills":\s*\[[^]]*c4-architecture') "user-level skill must not be listed as a project skill"
-  Assert-True ($manifest -match '"user_skills":\s*\[\s*"c4-architecture",\s*"mermaid-diagrams"\s*\]') "manifest user_skills"
+  Assert-True ($manifest -match '"user_skills":\s*\[[^]]*"architecture-topology"') "manifest user_skills: architecture-topology"
+  Assert-True ($manifest -match '"user_skills":\s*\[[^]]*"c4-architecture"') "manifest user_skills: c4-architecture"
+  Assert-True ($manifest -match '"user_skills":\s*\[[^]]*"mermaid-diagrams"') "manifest user_skills: mermaid-diagrams"
   Assert-True ($manifest -match '"skill_scope":\s*\{[^}]*"c4-architecture":\s*"user"') "manifest skill_scope"
   Assert-True ($manifest -match '"user_agent_destinations"') "manifest user destinations"
   Assert-True ($manifest -match "\.kimi-code") "manifest kimi-code destination"
@@ -234,6 +236,98 @@ try {
   # Invalid -Search value exits 2.
   & (Join-Path $Root "install.ps1") -Target (Join-Path $Tmp "sbad") -Mode adopt -NoGit -Search bogus 2>&1 | Out-Null
   Assert-True ($LASTEXITCODE -eq 2) "-Search bogus must exit 2"
+
+  # -Search off skips the routing block, graphify included, but the manifest
+  # still records the graphify decision. The word "graphify" itself may still
+  # appear in the user-level skills blurbs, so assert on the routing lines.
+  Assert-True ((Get-Content (Join-Path $SearchOff ".harness/manifest.json") -Raw) -match '"graphify"') "-Search off still records graphify in the manifest"
+  Assert-True ((Get-Content (Join-Path $SearchOff "AGENTS.md") -Raw) -notmatch 'graphify is (enabled|\*\*DISABLED)') "-Search off omits the graphify routing"
+
+  # graphify scale gate: the threshold lives in the repository-level
+  # .harness/graphify-threshold.txt, and the decision reaches the managed routing
+  # section and the manifest.
+  $GfySmall = Join-Path $Tmp "gfy-small"
+  New-Item -ItemType Directory -Force -Path $GfySmall | Out-Null
+  & (Join-Path $Root "install.ps1") -Target $GfySmall -Mode adopt -NoGit -SkipEnv | Out-Null
+  Assert-True ((Get-Content (Join-Path $GfySmall "AGENTS.md") -Raw) -match "- graphify is enabled for this project \(0 files <= threshold 483\)") "graphify on routing"
+  $gfyManifest = Get-Content (Join-Path $GfySmall ".harness/manifest.json") -Raw
+  Assert-True ($gfyManifest -match '"graphify":\s*\{[^}]*"decision":\s*"on"') "manifest graphify on"
+  Assert-True ($gfyManifest -match '"graphify":\s*\{[^}]*"metric":\s*"files"') "manifest graphify metric"
+  Assert-True ($gfyManifest -match '"graphify":\s*\{[^}]*"value":\s*0') "manifest graphify value"
+  Assert-True ($gfyManifest -match '"graphify":\s*\{[^}]*"threshold":\s*483') "manifest graphify threshold"
+  Assert-True ($gfyManifest -match '"graphify":\s*\{[^}]*"source":\s*"auto"') "manifest graphify source"
+
+  # A project above the threshold gets the explicit disable instead of the
+  # graphify routing line.
+  $GfyBig = Join-Path $Tmp "gfy-big"
+  New-Item -ItemType Directory -Force -Path (Join-Path $GfyBig "data") | Out-Null
+  foreach ($i in 1..500) { [System.IO.File]::WriteAllText((Join-Path $GfyBig "data/f$i.txt"), "") }
+  & (Join-Path $Root "install.ps1") -Target $GfyBig -Mode adopt -NoGit -SkipEnv | Out-Null
+  $bigAgents = Get-Content (Join-Path $GfyBig "AGENTS.md") -Raw
+  Assert-True ($bigAgents -match "\(500 files > threshold 483\)") "off routing states the measured count"
+  Assert-True ($bigAgents -match "graphify is \*\*DISABLED\*\* for this project") "off routing text"
+  Assert-True ($bigAgents -notmatch 'graphify` when `graphify-out/') "off decision drops the graphify routing line"
+  $bigManifest = Get-Content (Join-Path $GfyBig ".harness/manifest.json") -Raw
+  Assert-True ($bigManifest -match '"decision":\s*"off"') "manifest graphify off"
+  Assert-True ($bigManifest -match '"value":\s*500') "manifest off value"
+
+  # A `git init`ed project with an empty index must not recount as 0 files — that
+  # flipped the decision back to "on" on every re-run.
+  if (Get-Command git -ErrorAction SilentlyContinue) {
+    $GfyGit = Join-Path $Tmp "gfy-git"
+    New-Item -ItemType Directory -Force -Path $GfyGit | Out-Null
+    foreach ($i in 1..500) { [System.IO.File]::WriteAllText((Join-Path $GfyGit "f$i.txt"), "") }
+    & git -C $GfyGit init -q | Out-Null
+    & (Join-Path $Root "install.ps1") -Target $GfyGit -Mode adopt -NoGit -SkipEnv | Out-Null
+    $gitOut = & (Join-Path $Root "install.ps1") -Target $GfyGit -Mode adopt -NoGit -SkipEnv 6>&1
+    Assert-True (($gitOut -join "`n") -match "graphify off \(\d+ files > 483\)") "git project with empty index keeps the off decision"
+  }
+
+  # -Graphify on|off forces the decision over the measured file count.
+  $gfyOut = & (Join-Path $Root "install.ps1") -Target $GfyBig -Mode adopt -NoGit -SkipEnv -Graphify on 6>&1
+  Assert-True (($gfyOut -join "`n") -match "graphify on \(") "-Graphify on overrides the measured count"
+  $bigAgents = Get-Content (Join-Path $GfyBig "AGENTS.md") -Raw
+  Assert-True ($bigAgents -match "graphify is enabled for this project \(\d+ files > threshold 483; forced by -Graphify on\)") "-Graphify on injects the forced enable line"
+  Assert-True ($bigAgents -notmatch "\*\*DISABLED\*\*") "-Graphify on replaces the disable text"
+  $bigManifest = Get-Content (Join-Path $GfyBig ".harness/manifest.json") -Raw
+  Assert-True ($bigManifest -match '"decision":\s*"on"') "forced-on decision recorded"
+  Assert-True ($bigManifest -match '"source":\s*"flag"') "forced decision is recorded as flag"
+  & (Join-Path $Root "install.ps1") -Target $GfySmall -Mode adopt -NoGit -SkipEnv -Graphify off | Out-Null
+  $smallAgents = Get-Content (Join-Path $GfySmall "AGENTS.md") -Raw
+  Assert-True ($smallAgents -match "graphify is \*\*DISABLED\*\* for this project") "-Graphify off injects the disable text"
+  Assert-True ((Get-Content (Join-Path $GfySmall ".harness/manifest.json") -Raw) -match '"decision":\s*"off"') "forced-off decision recorded"
+
+  # Invalid -Graphify value exits 2 before anything is written.
+  $GfyBad = Join-Path $Tmp "gfy-bad"
+  & (Join-Path $Root "install.ps1") -Target $GfyBad -Mode adopt -NoGit -Graphify maybe 2>&1 | Out-Null
+  Assert-True ($LASTEXITCODE -eq 2) "-Graphify maybe must exit 2"
+  Assert-True (-not (Test-Path (Join-Path $GfyBad "AGENTS.md"))) "-Graphify maybe must abort before installing"
+
+  # The threshold file drives the gate: a source tree carrying a tiny threshold
+  # flips a small project off, and a missing file falls back to the built-in
+  # default with a warning.
+  $SrcCopy = Join-Path $Tmp "srccopy"
+  New-Item -ItemType Directory -Force -Path $SrcCopy | Out-Null
+  Copy-Item (Join-Path $Root "install.ps1") (Join-Path $SrcCopy "install.ps1")
+  Copy-Item (Join-Path $Root ".harness") (Join-Path $SrcCopy ".harness") -Recurse
+  [System.IO.File]::WriteAllText((Join-Path $SrcCopy ".harness/graphify-threshold.txt"), "metric: files`nthreshold: 2`n")
+  $GfyThr = Join-Path $Tmp "gfy-thr"
+  New-Item -ItemType Directory -Force -Path $GfyThr | Out-Null
+  foreach ($n in @("a", "b", "c")) { [System.IO.File]::WriteAllText((Join-Path $GfyThr "$n.txt"), "x") }
+  $thrOut = & (Join-Path $SrcCopy "install.ps1") -Target $GfyThr -Mode adopt -NoGit -SkipEnv 6>&1
+  Assert-True (($thrOut -join "`n") -match "graphify off \(3 files > 2\)") "threshold file drives the gate"
+  Assert-True ((Get-Content (Join-Path $GfyThr ".harness/manifest.json") -Raw) -match '"threshold":\s*2') "manifest records the file threshold"
+  Remove-Item (Join-Path $SrcCopy ".harness/graphify-threshold.txt") -Force
+  # [Console]::Error is process stderr, so the warning line is captured by
+  # launching the installer as a child process.
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $thrWarn = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $SrcCopy "install.ps1") -Target $GfyThr -Mode adopt -NoGit -SkipEnv 2>&1
+  }
+  finally { $ErrorActionPreference = $prevEap }
+  Assert-True (($thrWarn -join "`n") -match "graphify-threshold.txt missing or invalid") "missing threshold file warns"
+  Assert-True ((Get-Content (Join-Path $GfyThr ".harness/manifest.json") -Raw) -match '"threshold":\s*483') "fallback threshold"
 
   # Env bootstrap: fresh install without manifests records an ok report.
   Assert-True ((Get-Content (Join-Path $New ".harness/reports/env-report.md") -Raw) -match "result: ok") "env report ok after fresh install"

@@ -42,8 +42,12 @@ if grep -q '"skills": \[[^]]*c4-architecture' "$TMP/new/.harness/manifest.json";
   echo "install smoke test: FAIL (user-level skill listed as a project skill)" >&2
   exit 1
 fi
-grep -q '"user_skills": \["c4-architecture","mermaid-diagrams"\]' "$TMP/new/.harness/manifest.json"
-grep -q '"skill_scope": {"c4-architecture": "user","mermaid-diagrams": "user"' "$TMP/new/.harness/manifest.json"
+grep -q '"user_skills": \[[^]]*"architecture-topology"' "$TMP/new/.harness/manifest.json"
+grep -q '"user_skills": \[[^]]*"c4-architecture"' "$TMP/new/.harness/manifest.json"
+grep -q '"user_skills": \[[^]]*"mermaid-diagrams"' "$TMP/new/.harness/manifest.json"
+grep -q '"skill_scope": {[^}]*"architecture-topology": "user"' "$TMP/new/.harness/manifest.json"
+grep -q '"skill_scope": {[^}]*"c4-architecture": "user"' "$TMP/new/.harness/manifest.json"
+grep -q '"skill_scope": {[^}]*"mermaid-diagrams": "user"' "$TMP/new/.harness/manifest.json"
 grep -qF "\"user_agent_destinations\": [\"$HOME/.claude/skills\"" "$TMP/new/.harness/manifest.json"
 grep -qF "$HOME/.kimi-code/skills" "$TMP/new/.harness/manifest.json"
 test -d "$TMP/new/evals/results"
@@ -276,6 +280,84 @@ fi
 # Invalid --search value exits 2.
 rc=0; "$ROOT/install.sh" --target "$TMP/sbad" --mode adopt --no-git --search bogus >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 2 ] || { echo "install smoke test: FAIL (--search bogus exits $rc, want 2)" >&2; exit 1; }
+
+# --search off skips the routing block, graphify included, but the manifest still
+# records the graphify decision. The word "graphify" itself may still appear in the
+# user-level skills blurbs, so assert on the injected routing lines instead.
+grep -q '"graphify": {"decision":' "$TMP/searchoff/.harness/manifest.json"
+if grep -qE 'graphify is (enabled|\*\*DISABLED\*\*)' "$TMP/searchoff/AGENTS.md"; then
+  echo "install smoke test: FAIL (--search off still injects the graphify routing)" >&2
+  exit 1
+fi
+
+# graphify scale gate: the threshold lives in the repository-level
+# .harness/graphify-threshold.txt, and the decision reaches the managed routing
+# section and the manifest.
+mkdir -p "$TMP/gfy-small"
+"$ROOT/install.sh" --target "$TMP/gfy-small" --mode adopt --no-git --skip-env >/dev/null
+grep -q -- '- graphify is enabled for this project (0 files <= threshold 483)' "$TMP/gfy-small/AGENTS.md"
+grep -q '"graphify": {"decision": "on", "metric": "files", "value": 0, "threshold": 483, "source": "auto"}' \
+  "$TMP/gfy-small/.harness/manifest.json"
+
+# A project above the threshold gets the explicit disable instead of the graphify
+# routing line.
+mkdir -p "$TMP/gfy-big/data"
+i=0; while [ "$i" -lt 500 ]; do : > "$TMP/gfy-big/data/f$i.txt"; i=$((i + 1)); done
+"$ROOT/install.sh" --target "$TMP/gfy-big" --mode adopt --no-git --skip-env >/dev/null
+grep -q -- '  (500 files > threshold 483)' "$TMP/gfy-big/AGENTS.md"
+grep -q 'graphify is \*\*DISABLED\*\* for this project' "$TMP/gfy-big/AGENTS.md"
+if grep -q 'graphify` when `graphify-out/`' "$TMP/gfy-big/AGENTS.md"; then
+  echo "install smoke test: FAIL (off decision kept the graphify routing line)" >&2
+  exit 1
+fi
+grep -q '"graphify": {"decision": "off", "metric": "files", "value": 500, "threshold": 483, "source": "auto"}' \
+  "$TMP/gfy-big/.harness/manifest.json"
+
+# A `git init`ed project with an empty index must not recount as 0 files — that
+# flipped the decision back to "on" on every re-run.
+if command -v git >/dev/null 2>&1; then
+  mkdir -p "$TMP/gfy-git"
+  i=0; while [ "$i" -lt 500 ]; do : > "$TMP/gfy-git/f$i.txt"; i=$((i + 1)); done
+  git -C "$TMP/gfy-git" init -q
+  "$ROOT/install.sh" --target "$TMP/gfy-git" --mode adopt --no-git --skip-env >/dev/null
+  out="$("$ROOT/install.sh" --target "$TMP/gfy-git" --mode adopt --no-git --skip-env)"
+  printf '%s\n' "$out" | grep -qE '^graphify off \([0-9]+ files > 483\)' || {
+    echo "install smoke test: FAIL (git project with empty index recounted as 0 files)" >&2; exit 1; }
+fi
+
+# --graphify on|off forces the decision over the measured file count.
+"$ROOT/install.sh" --target "$TMP/gfy-big" --mode adopt --no-git --skip-env --graphify on >/dev/null
+grep -q -- '- graphify is enabled for this project ([0-9]* files > threshold 483; forced by --graphify on)' \
+  "$TMP/gfy-big/AGENTS.md"
+grep -q '"decision": "on", "metric": "files"' "$TMP/gfy-big/.harness/manifest.json"
+grep -q '"threshold": 483, "source": "flag"' "$TMP/gfy-big/.harness/manifest.json"
+"$ROOT/install.sh" --target "$TMP/gfy-small" --mode adopt --no-git --skip-env --graphify off >/dev/null
+grep -q 'graphify is \*\*DISABLED\*\* for this project' "$TMP/gfy-small/AGENTS.md"
+grep -q '"decision": "off", "metric": "files"' "$TMP/gfy-small/.harness/manifest.json"
+grep -q '"threshold": 483, "source": "flag"' "$TMP/gfy-small/.harness/manifest.json"
+
+# Invalid or missing --graphify values exit 2 before anything is written.
+rc=0; "$ROOT/install.sh" --target "$TMP/gfy-bad" --mode adopt --no-git --graphify maybe >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || { echo "install smoke test: FAIL (--graphify maybe exits $rc, want 2)" >&2; exit 1; }
+rc=0; "$ROOT/install.sh" --target "$TMP/gfy-bad" --mode adopt --no-git --graphify >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || { echo "install smoke test: FAIL (--graphify missing value exits $rc, want 2)" >&2; exit 1; }
+test ! -e "$TMP/gfy-bad/AGENTS.md"
+
+# The threshold file drives the gate: a source tree carrying a tiny threshold
+# flips a small project off, and a missing file falls back to the built-in
+# default with a warning.
+SRCCOPY="$TMP/srccopy"; mkdir -p "$SRCCOPY" "$TMP/gfy-thr"
+cp "$ROOT/install.sh" "$SRCCOPY/"
+cp -r "$ROOT/.harness" "$SRCCOPY/.harness"
+printf 'metric: files\nthreshold: 2\n' > "$SRCCOPY/.harness/graphify-threshold.txt"
+for f in a b c; do printf 'x\n' > "$TMP/gfy-thr/$f.txt"; done
+out="$("$SRCCOPY/install.sh" --target "$TMP/gfy-thr" --mode adopt --no-git --skip-env 2>&1)"
+printf '%s\n' "$out" | grep -q '^graphify off (3 files > 2)'
+grep -q '"threshold": 2' "$TMP/gfy-thr/.harness/manifest.json"
+rm "$SRCCOPY/.harness/graphify-threshold.txt"
+out="$("$SRCCOPY/install.sh" --target "$TMP/gfy-thr" --mode adopt --no-git --skip-env 2>&1)"
+printf '%s\n' "$out" | grep -q 'warn   .*graphify-threshold.txt missing or invalid'
+grep -q '"threshold": 483' "$TMP/gfy-thr/.harness/manifest.json"
 
 # Legacy layout is reported but does not fail a complete installation.
 mkdir -p "$TMP/new/.agents/skills" "$TMP/new/.rsi"

@@ -2,3 +2,4 @@
 # <skill> <scope> [agents]
 c4-architecture      user    all
 mermaid-diagrams     user    all
+architecture-topology user   all

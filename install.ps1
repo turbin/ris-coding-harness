@@ -65,6 +65,7 @@ param(
   [string[]]$Agent = @(),
   [string]$Scope = "project",
   [string]$Search = "zvec",
+  [string]$Graphify = "auto",
   [switch]$Help,
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$RemainingArgs = @()
@@ -106,6 +107,13 @@ Options:
                          the search-routing section into AGENTS.md and
                          provisions the zg CLI (npm -g @zvec/zvec-grep) when
                          missing; off skips both
+  -Graphify auto|on|off  graphify scale gate (default: auto). auto keeps the
+                         graphify routing when the project has at most the
+                         file-count threshold (.harness/graphify-threshold.txt,
+                         483) and replaces it with an explicit disable above;
+                         on/off force the decision. The graphify item sits in
+                         the search-routing block, so -Search off also skips
+                         it; the manifest records the decision either way
   -Help                  Show this help
 
 Modes:
@@ -135,6 +143,10 @@ if (@("project", "user") -notcontains $Scope) {
 }
 if (@("zvec", "off") -notcontains $Search) {
   [Console]::Error.WriteLine("Invalid search: $Search (want zvec|off)")
+  exit 2
+}
+if (@("auto", "on", "off") -notcontains $Graphify) {
+  [Console]::Error.WriteLine("Invalid graphify: $Graphify (want auto|on|off)")
   exit 2
 }
 if ($RemainingArgs.Count -gt 0) {
@@ -317,6 +329,65 @@ try {
     if (-not $declared) { $declared = "all" }
     return @($declared -split ',')
   }
+
+  # --- graphify scale gate (.harness/graphify-threshold.txt) --------------------
+  # Repository-level config, read from the source tree (not installed into the
+  # target): a project whose file count is at or below the threshold keeps the
+  # graphify routing; above it the topology is unreliable and the managed
+  # routing replaces graphify with an explicit disable. A missing or invalid
+  # value falls back to the built-in default. Format: "# comments",
+  # "metric: files", "threshold: <N>".
+  $GraphifyThresholdFile = Join-Path $SourceRoot "graphify-threshold.txt"
+  $DefaultGraphifyThreshold = 483
+  $DefaultGraphifyMetric = "files"
+
+  function Get-GraphifyConf([string]$Key) {
+    if (-not (Test-Path -LiteralPath $GraphifyThresholdFile)) { return $null }
+    foreach ($line in (Get-Content -LiteralPath $GraphifyThresholdFile)) {
+      $f = ($line.Trim() -split '\s+')
+      if ($f.Count -ge 2 -and $f[0] -eq "$($Key):") { return $f[1] }
+    }
+    return $null
+  }
+
+  # Directories that never count towards the project scale: dependencies, build
+  # output, caches, and the local indexes of the retrieval tools themselves.
+  $GraphifyIgnoredDirs = @(".git", "node_modules", ".venv", "venv", "target", "build",
+                           "dist", "out", "__pycache__", ".next", ".gradle", ".idea",
+                           ".cache", ".zvec-grep", ".codegraph")
+
+  # File count for a git project (tracked + untracked-but-unignored), otherwise a
+  # pruned file walk. Untracked files must count: a freshly `git init`ed project has
+  # an empty index, and counting only tracked files reported 0 — flipping the
+  # decision back to "on" on every re-run.
+  function Get-ProjectFileCount([string]$Root) {
+    if (Test-Path -LiteralPath (Join-Path $Root ".git")) {
+      $git = Get-Command git -ErrorAction SilentlyContinue
+      if ($git) {
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try { $tracked = @(& git -C $Root ls-files --cached --others --exclude-standard 2>$null) }
+        finally { $ErrorActionPreference = $prevEap }
+        if ($LASTEXITCODE -eq 0) { return $tracked.Count }
+      }
+    }
+    $count = 0
+    $stack = New-Object System.Collections.Stack
+    $stack.Push($Root)
+    while ($stack.Count -gt 0) {
+      $dir = $stack.Pop()
+      foreach ($i in @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue)) {
+        # Reparse points (junctions/symlinks) are skipped: they can cycle.
+        if ($i.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { continue }
+        if ($i.PSIsContainer) {
+          if ($GraphifyIgnoredDirs -notcontains $i.Name) { $stack.Push($i.FullName) }
+        }
+        else { $count++ }
+      }
+    }
+    return $count
+  }
+
   # User-level destinations of one skill: its manifest agents, narrowed by
   # -Agent when given.
   function Get-UserSkillDestinations([string]$Skill) {
@@ -402,17 +473,39 @@ outside the markers.
     $repair = ((Show-RepairHint | Out-String).Trim()) -replace "^Repair: ", ""
     $searchSection = ""
     if ($Search -eq "zvec") {
-      $searchSection = @'
+      $searchHead = @'
 **Search routing (zvec is the default fuzzy-search layer)**
 
 - Fuzzy/semantic lookups for code or evidence: `zg query --human "<question>"`.
   On first use run `zg status`, then `zg index` if missing (storage lives in
   `.zvec-grep/`, git-ignored); refresh with `zg index` after large changes.
 - Exact string/symbol lookups: native Grep/Glob (or `zg query --rg`).
-- Structure, relationships, architecture: `graphify` when `graphify-out/`
-  exists; call graphs and blast radius: CodeGraph (`.codegraph/`).
+'@
+      if ($GraphifyDecision -eq "on") {
+        $enabledLine = "- graphify is enabled for this project ($GraphifyValue files > threshold $GraphifyThreshold; forced by -Graphify on)"
+        if ($GraphifyCmp -eq "<=") {
+          $enabledLine = "- graphify is enabled for this project ($GraphifyValue files <= threshold $GraphifyThreshold) -"
+        }
+        $graphifyLines = @(
+          '- Structure, relationships, architecture: `graphify` when `graphify-out/`',
+          '  exists; call graphs and blast radius: CodeGraph (`.codegraph/`).',
+          $enabledLine,
+          '  run `graphify update .` before the first structural query.'
+        ) -join "`n"
+      }
+      else {
+        $graphifyLines = @(
+          "- Structure/architecture queries: graphify is **DISABLED** for this project",
+          "  ($GraphifyValue files > threshold $GraphifyThreshold) - its topology is unreliable at that scale",
+          '  (decision in `decisions/`); do not use graphify and do not build',
+          '  `graphify-out/`. Use `zg query` (semantic retrieval) + CodeGraph (call graphs',
+          '  / blast radius) instead; use `zg` for cross-document semantics.'
+        ) -join "`n"
+      }
+      $searchTail = @'
 - Verify retrieved evidence with native tools before editing.
 '@
+      $searchSection = (@($searchHead, $graphifyLines, $searchTail) -join "`n") + "`n"
     }
     @"
 $($script:BeginMark)
@@ -428,6 +521,7 @@ $($script:BeginMark)
 
 - `c4-architecture` (vendored, MIT) - architecture documentation as C4-model Mermaid diagrams (context / container / component / deployment). Scoped user-level in the harness repo's `.harness/skill-scope.txt`, so the installer puts it in this machine's agent user directories (`~/.kimi-code/skills/c4-architecture/`, `~/.claude/skills/c4-architecture/`, `~/.pi/agent/skills/c4-architecture/`, ...) instead of `.harness/skills/` - it is not part of this repository. Invoke it directly when documenting system structure, module boundaries, or deployment topology; write to the project's existing architecture-doc location.
 - `mermaid-diagrams` (vendored, MIT) - Mermaid diagram syntax reference (flow, sequence, class, ERD, state, git graphs, charts) with per-type references, user-level like `c4-architecture` (`~/.kimi-code/skills/mermaid-diagrams/`, `~/.claude/skills/mermaid-diagrams/`, ...), not part of this repository. Invoke directly when a task needs a diagram; architecture documentation (C4) is owned by c4-architecture.
+- `architecture-topology` (homegrown) - on-demand architecture-topology synthesis with a dated disk cache (`docs/architecture/topology.md`: module map, dependency direction, hubs, key paths), user-level like the two skills above. Invoke it for module / hub / dependency-direction / reachability questions on projects where the scale gate disabled graphify; it never replaces CodeGraph for code-level call paths.
 
 **Engineering rules (decision layer, outside `.harness/`)**
 
@@ -569,6 +663,13 @@ $($script:EndMark)
       skill_scope = $scopeMap
       agent_destinations = $dests
       user_agent_destinations = $userDests
+      graphify = [pscustomobject]@{
+        decision = $GraphifyDecision
+        metric = $GraphifyMetric
+        value = [int]$GraphifyValue
+        threshold = [int]$GraphifyThreshold
+        source = $GraphifySource
+      }
       files = $files
     }
     $json = $obj | ConvertTo-Json -Depth 5
@@ -692,6 +793,28 @@ $($script:EndMark)
   }
 
   Write-Host "Project bootstrap: mode=$Mode target=$TargetRoot"
+
+  # graphify scale gate: the project's own file count (measured before this run
+  # writes anything) decides whether the managed routing keeps graphify.
+  $GraphifyThreshold = Get-GraphifyConf "threshold"
+  if (-not $GraphifyThreshold -or $GraphifyThreshold -notmatch '^\d+$') {
+    $GraphifyThreshold = $DefaultGraphifyThreshold
+    [Console]::Error.WriteLine("warn   $GraphifyThresholdFile missing or invalid; using the built-in graphify threshold $GraphifyThreshold")
+  }
+  $GraphifyMetric = Get-GraphifyConf "metric"
+  if (-not $GraphifyMetric) { $GraphifyMetric = $DefaultGraphifyMetric }
+  $GraphifyValue = Get-ProjectFileCount $TargetRoot
+  $GraphifyCmp = ">"
+  if ($GraphifyValue -le [int]$GraphifyThreshold) { $GraphifyCmp = "<=" }
+  if ($Graphify -eq "auto") {
+    $GraphifySource = "auto"
+    if ($GraphifyCmp -eq "<=") { $GraphifyDecision = "on" } else { $GraphifyDecision = "off" }
+  }
+  else {
+    $GraphifySource = "flag"
+    $GraphifyDecision = $Graphify
+  }
+  Write-Host "graphify $GraphifyDecision ($GraphifyValue files $GraphifyCmp $GraphifyThreshold)"
 
   # --- Core files ---------------------------------------------------------------
   Merge-Managed (Join-Path $TargetRoot "AGENTS.md") (Build-AgentsSection) $AgentsSkel

@@ -1,0 +1,6 @@
+# graphify scale gate. metric=files, threshold=483; projects at or below it keep graphify,
+# projects above it disable graphify (topology unreliable at that scale).
+# Anchor: zotero-plugin-ai4paper (483 files, median of the 33 project dirs in E:\workspace, 2026-09-23).
+# Calibration: revise this number from graphify's own runtime messages on real projects.
+metric: files
+threshold: 483
