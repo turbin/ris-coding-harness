@@ -335,7 +335,7 @@ git commit -m "feat: failure-event CLI 五态分类优先级与金测骨架"
 
 **Interfaces:**
 - Consumes: `base_doc`、`run_cli`（Task 1）。
-- Produces: 全量 `GOLDEN_CASES`（21 案例），后续任务不得删改其期望值。
+- Produces: 全量 `GOLDEN_CASES`（23 案例），后续任务不得删改其期望值。
 
 - [ ] **Step 1: 替换 GOLDEN_CASES 为全量表**
 

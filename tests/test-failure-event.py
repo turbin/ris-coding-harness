@@ -133,6 +133,28 @@ class CliContract(unittest.TestCase):
                       {"success", "task_failure", "infra_failure",
                        "cancelled", "indeterminate"})
 
+    def test_empty_stdin_identity_missing(self):
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT)], input="",
+            capture_output=True, text=True, encoding="utf-8", timeout=30,
+        )
+        self.assertEqual(proc.returncode, 0)
+        out = json.loads(proc.stdout)
+        self.assertFalse(out["ok"])
+        self.assertIn("error", out)
+
+    def test_missing_task_id_rejected(self):
+        doc = base_doc()
+        del doc["task_id"]
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT)], input=json.dumps(doc),
+            capture_output=True, text=True, encoding="utf-8", timeout=30,
+        )
+        self.assertEqual(proc.returncode, 0)
+        out = json.loads(proc.stdout)
+        self.assertFalse(out["ok"])
+        self.assertIn("error", out)
+
 
 class GoldenClassification(unittest.TestCase):
     def test_golden_table(self):
@@ -255,6 +277,12 @@ class ReflectionFingerprint(unittest.TestCase):
         self.assertEqual(a["fingerprints"]["reflection"]["hash"],
                          b["fingerprints"]["reflection"]["hash"])
 
+    def test_line_string_coerced_to_int(self):
+        a = run_cli(fp_doc(line="183"))
+        b = run_cli(fp_doc(line=183))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
 
 class RecurrenceSignature(unittest.TestCase):
     def test_parser_example_same_recurrence_different_reflection(self):
@@ -296,6 +324,30 @@ class RecurrenceSignature(unittest.TestCase):
     def test_recurrence_version(self):
         out = run_cli(fp_doc())
         self.assertEqual(out["fingerprints"]["recurrence"]["version"], "rs/v1")
+
+    def test_quoted_unix_path_pair(self):
+        a = run_cli(fp_doc(error_signature='File "/opt/projA/foo.py failed"'))
+        b = run_cli(fp_doc(error_signature='File "/opt/projB/foo.py failed"'))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+        self.assertEqual(a["fingerprints"]["recurrence"]["hash"],
+                         b["fingerprints"]["recurrence"]["hash"])
+
+    def test_home_remnant_path_pair(self):
+        a = run_cli(fp_doc(error_signature="open C:\\Users\\dev\\projA\\foo.py failed"))
+        b = run_cli(fp_doc(error_signature="open C:\\Users\\bob\\projB\\foo.py failed"))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+        self.assertEqual(a["fingerprints"]["recurrence"]["hash"],
+                         b["fingerprints"]["recurrence"]["hash"])
+
+    def test_relative_path_pair(self):
+        a = run_cli(fp_doc(error_signature="src/a/foo.py:42 boom"))
+        b = run_cli(fp_doc(error_signature="src/b/foo.py:99 boom"))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+        self.assertEqual(a["fingerprints"]["recurrence"]["hash"],
+                         b["fingerprints"]["recurrence"]["hash"])
 
 
 class Determinism(unittest.TestCase):

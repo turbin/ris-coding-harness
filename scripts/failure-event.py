@@ -10,6 +10,7 @@ Spec: decisions/2026-09-24-failure-reflection-loop.md
 """
 import hashlib
 import json
+import os
 import re
 import sys
 
@@ -59,7 +60,7 @@ def classify(signals):
         return "success"
     if evidence == "failed":
         return "task_failure"
-    # Priorities 5–9 implemented here; full A1 golden table lands in Task 2.
+    # Priorities 5–9 implemented here; full A1 golden table added in Task 2 (23 cases).
     if signals.get("budget_exhausted"):
         return "task_failure"
     if signals.get("verification_required") and not signals.get("verification_performed"):
@@ -122,6 +123,9 @@ def strip_noise(text):
 
 
 def reflection_fingerprint(signals):
+    line = signals.get("line")
+    if isinstance(line, str) and line.isdigit():
+        line = int(line)
     return {"version": "rf/v1", "hash": sha_hex({
         "v": "rf/v1",
         "category": signals.get("failure_category") or "unknown",
@@ -129,17 +133,23 @@ def reflection_fingerprint(signals):
         "signature": strip_noise(signals.get("error_signature") or ""),
         "scope": signals.get("scope") or "",
         "path": strip_noise(signals.get("path") or ""),
-        "line": signals.get("line"),
+        "line": line,
     })}
 
 
 _LINE_NO_RE = re.compile(r":\d+\b")
 _WIN_PATH_RE = re.compile(r"[A-Za-z]:(?:\\|/)(?:[^\s\"']+(?:\\|/))*[^\s\"']+")
-_UNIX_PATH_RE = re.compile(r"(?:^|(?<=\s))/[^\s\"']+")
+# 左边界允许起始、空白、引号与左括号（如 File "/opt/... 与 open (... ）
+_UNIX_PATH_RE = re.compile(r"(?:^|(?<=[\"'\s(]))/[^\s\"']+")
+# strip_noise 残留：<HOME>\rel\path 或 <TMP>/rel/path → basename
+_HOME_REMNANT_RE = re.compile(r"(?:<HOME>|<TMP>)[\\/][^\s\"']+")
+# 相对路径 token：≥1 个分隔符且带扩展名 → basename
+_REL_PATH_RE = re.compile(
+    r"[A-Za-z0-9_.-]+(?:[\\/][A-Za-z0-9_.-]+)+\.[A-Za-z0-9]+")
 
 
 def _basename(match):
-    token = match.group(0)
+    token = match.group(0) if hasattr(match, "group") else match
     for sep in ("/", "\\"):
         token = token.split(sep)[-1] if sep in token else token
     return token
@@ -150,6 +160,8 @@ def normalize_recurrence(text):
     text = _LINE_NO_RE.sub(":<LINE>", text)
     text = _WIN_PATH_RE.sub(_basename, text)
     text = _UNIX_PATH_RE.sub(_basename, text)
+    text = _HOME_REMNANT_RE.sub(_basename, text)
+    text = _REL_PATH_RE.sub(_basename, text)
     return text
 
 
@@ -172,10 +184,19 @@ def failure_event_id(doc):
     })[:16]
 
 
+def validate_identity(doc):
+    for key in ("run_id", "task_id", "attempt", "terminal_sequence"):
+        if key not in doc or doc[key] is None:
+            raise ValueError(f"missing required identity field: {key}")
+
+
 def main():
     try:
         raw = sys.stdin.read()
         doc = json.loads(raw) if raw.strip() else {}
+        if not isinstance(doc, dict):
+            raise ValueError("input document must be a JSON object")
+        validate_identity(doc)
         signals = doc.get("signals") or {}
         validate_signals(signals)
         state = classify(signals)
@@ -188,9 +209,13 @@ def main():
                                 "recurrence": recurrence_signature(signals)}}
     except Exception as exc:  # fail-open
         out = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-    json.dump(out, sys.stdout, sort_keys=True, separators=(",", ":"),
-              ensure_ascii=True)
-    sys.stdout.write("\n")
+    try:
+        json.dump(out, sys.stdout, sort_keys=True, separators=(",", ":"),
+                  ensure_ascii=True)
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+    except OSError:
+        os._exit(0)  # broken pipe: skip interpreter-shutdown flush, stay exit 0
     return 0
 
 
