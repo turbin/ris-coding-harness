@@ -237,6 +237,24 @@ class ReflectionFingerprint(unittest.TestCase):
         self.assertEqual(a["fingerprints"]["reflection"]["hash"],
                          b["fingerprints"]["reflection"]["hash"])
 
+    def test_windows_user_temp_noise_ignored(self):
+        a = run_cli(fp_doc(path="C:\\Users\\dev\\AppData\\Local\\Temp\\run-a\\parser.py"))
+        b = run_cli(fp_doc(path="C:\\Users\\dev\\AppData\\Local\\Temp\\run-b\\parser.py"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
+    def test_home_noise_ignored(self):
+        a = run_cli(fp_doc(path="C:\\Users\\alice\\proj\\parser.py"))
+        b = run_cli(fp_doc(path="C:\\Users\\bob\\proj\\parser.py"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
+    def test_uuid_noise_ignored(self):
+        a = run_cli(fp_doc(error_signature="run 550e8400-e29b-41d4-a716-446655440000 failed"))
+        b = run_cli(fp_doc(error_signature="run 6ba7b810-9dad-11d1-80b4-00c04fd430c8 failed"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

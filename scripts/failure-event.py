@@ -101,9 +101,12 @@ _UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
                       r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 _HOME_WIN_RE = re.compile(r"[A-Za-z]:[\\/]Users[\\/][^\\/]+")
 _HOME_UNIX_RE = re.compile(r"(?:/home/|/Users/)[^\\/\s\"']+")
-_TMP_SEG_RE = re.compile(
-    r"(?:[A-Za-z]:[\\/][^\\/\s\"']*?[\\/]AppData[\\/]Local[\\/]Temp"
-    r"|(?:^|(?<=[\"'\s]))/(?:tmp|var/tmp)/(?:[^\\/\s\"']*/)?)")
+# TMP 必须先于 HOME 执行，否则 C:\Users\<n>\AppData... 的盘符前缀已被替换；
+# 盘符段允许多级目录；Windows/Unix 两侧各吞一个后续段（对称，消除 run-a/run-b 差异）
+_TMP_WIN_RE = re.compile(
+    r"[A-Za-z]:[\\/](?:[^\\/\s\"']*[\\/])*AppData[\\/]Local[\\/]Temp[\\/]"
+    r"(?:[^\\/\s\"']*[\\/])?")
+_TMP_UNIX_RE = re.compile(r"/(?:tmp|var/tmp)/(?:[^\\/\s\"']*[\\/]*)?")
 
 
 def strip_noise(text):
@@ -111,9 +114,10 @@ def strip_noise(text):
         return ""
     text = _TS_RE.sub("<TS>", text)
     text = _UUID_RE.sub("<UUID>", text)
+    text = _TMP_WIN_RE.sub("<TMP>", text)
+    text = _TMP_UNIX_RE.sub("<TMP>", text)
     text = _HOME_WIN_RE.sub("<HOME>", text)
     text = _HOME_UNIX_RE.sub("<HOME>", text)
-    text = _TMP_SEG_RE.sub("<TMP>", text)
     return text
 
 
