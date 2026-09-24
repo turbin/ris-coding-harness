@@ -661,6 +661,24 @@ class ReflectionFingerprint(unittest.TestCase):
         b = run_cli(fp_doc(path="/tmp/run-b/parser.py"))
         self.assertEqual(a["fingerprints"]["reflection"]["hash"],
                          b["fingerprints"]["reflection"]["hash"])
+
+    def test_windows_user_temp_noise_ignored(self):
+        a = run_cli(fp_doc(path="C:\\Users\\dev\\AppData\\Local\\Temp\\run-a\\parser.py"))
+        b = run_cli(fp_doc(path="C:\\Users\\dev\\AppData\\Local\\Temp\\run-b\\parser.py"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
+    def test_home_noise_ignored(self):
+        a = run_cli(fp_doc(path="C:\\Users\\alice\\proj\\parser.py"))
+        b = run_cli(fp_doc(path="C:\\Users\\bob\\proj\\parser.py"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
+    def test_uuid_noise_ignored(self):
+        a = run_cli(fp_doc(error_signature="run 550e8400-e29b-41d4-a716-446655440000 failed"))
+        b = run_cli(fp_doc(error_signature="run 6ba7b810-9dad-11d1-80b4-00c04fd430c8 failed"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
 ```
 
 （实现者注意：删除上例中被覆盖的第一对 `run_cli` 赋值，仅保留 `/tmp/run-a` vs `/tmp/run-b` 比较。）
@@ -678,9 +696,12 @@ _UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
                       r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 _HOME_WIN_RE = re.compile(r"[A-Za-z]:[\\/]Users[\\/][^\\/]+")
 _HOME_UNIX_RE = re.compile(r"(?:/home/|/Users/)[^\\/\s\"']+")
-_TMP_SEG_RE = re.compile(
-    r"(?:[A-Za-z]:[\\/][^\\/\s\"']*?[\\/]AppData[\\/]Local[\\/]Temp"
-    r"|(?:^|(?<=[\"'\s]))/(?:tmp|var/tmp)/)")
+# TMP 必须先于 HOME 执行，否则 C:\Users\<n>\AppData... 的盘符前缀已被替换；
+# 盘符段允许多级目录；Windows/Unix 两侧各吞一个后续段（对称，消除 run-a/run-b 差异）
+_TMP_WIN_RE = re.compile(
+    r"[A-Za-z]:[\\/](?:[^\\/\s\"']*[\\/])*AppData[\\/]Local[\\/]Temp[\\/]"
+    r"(?:[^\\/\s\"']*[\\/])?")
+_TMP_UNIX_RE = re.compile(r"/(?:tmp|var/tmp)/(?:[^\\/\s\"']*[\\/]*)?")
 
 
 def strip_noise(text):
@@ -688,9 +709,10 @@ def strip_noise(text):
         return ""
     text = _TS_RE.sub("<TS>", text)
     text = _UUID_RE.sub("<UUID>", text)
+    text = _TMP_WIN_RE.sub("<TMP>", text)
+    text = _TMP_UNIX_RE.sub("<TMP>", text)
     text = _HOME_WIN_RE.sub("<HOME>", text)
     text = _HOME_UNIX_RE.sub("<HOME>", text)
-    text = _TMP_SEG_RE.sub("<TMP>", text)
     return text
 
 
