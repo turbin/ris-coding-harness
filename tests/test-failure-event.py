@@ -195,5 +195,48 @@ class FailureEventId(unittest.TestCase):
         self.assertNotEqual(a["failure_event_id"], b["failure_event_id"])
 
 
+def fp_doc(**overrides):
+    sig = {"acceptance_evidence": "failed",
+           "failure_category": "implementation_error",
+           "tool_identity": "pytest",
+           "error_signature": "LegacySchemaError: missing field 'invoice'",
+           "scope": "parser", "path": "src/parser.py", "line": 183}
+    sig.update(overrides)
+    return base_doc(**sig)
+
+
+class ReflectionFingerprint(unittest.TestCase):
+    def test_identical_failures_equal(self):
+        a = run_cli(fp_doc())
+        b = run_cli(fp_doc())
+        self.assertEqual(a["fingerprints"]["reflection"],
+                         b["fingerprints"]["reflection"])
+        self.assertEqual(a["fingerprints"]["reflection"]["version"], "rf/v1")
+
+    def test_line_change_makes_new_fingerprint(self):
+        a = run_cli(fp_doc())
+        b = run_cli(fp_doc(line=241))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+
+    def test_path_change_makes_new_fingerprint(self):
+        a = run_cli(fp_doc())
+        b = run_cli(fp_doc(path="src/parser_v2.py"))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+
+    def test_timestamp_noise_ignored(self):
+        a = run_cli(fp_doc(error_signature="fail at 2026-09-24T10:00:00Z"))
+        b = run_cli(fp_doc(error_signature="fail at 2026-09-25T23:59:59Z"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
+    def test_tmp_path_noise_ignored(self):
+        a = run_cli(fp_doc(path="/tmp/run-a/parser.py"))
+        b = run_cli(fp_doc(path="/tmp/run-b/parser.py"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

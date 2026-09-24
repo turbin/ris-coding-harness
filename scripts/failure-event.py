@@ -10,6 +10,7 @@ Spec: decisions/2026-09-24-failure-reflection-loop.md
 """
 import hashlib
 import json
+import re
 import sys
 
 for _s in (sys.stdin, sys.stdout, sys.stderr):
@@ -94,6 +95,40 @@ def sha_hex(obj):
     return hashlib.sha256(canonical(obj).encode("utf-8")).hexdigest()
 
 
+_TS_RE = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?"
+                    r"(?:Z|[+-]\d{2}:?\d{2})?")
+_UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+                      r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+_HOME_WIN_RE = re.compile(r"[A-Za-z]:[\\/]Users[\\/][^\\/]+")
+_HOME_UNIX_RE = re.compile(r"(?:/home/|/Users/)[^\\/\s\"']+")
+_TMP_SEG_RE = re.compile(
+    r"(?:[A-Za-z]:[\\/][^\\/\s\"']*?[\\/]AppData[\\/]Local[\\/]Temp"
+    r"|(?:^|(?<=[\"'\s]))/(?:tmp|var/tmp)/(?:[^\\/\s\"']*/)?)")
+
+
+def strip_noise(text):
+    if not text:
+        return ""
+    text = _TS_RE.sub("<TS>", text)
+    text = _UUID_RE.sub("<UUID>", text)
+    text = _HOME_WIN_RE.sub("<HOME>", text)
+    text = _HOME_UNIX_RE.sub("<HOME>", text)
+    text = _TMP_SEG_RE.sub("<TMP>", text)
+    return text
+
+
+def reflection_fingerprint(signals):
+    return {"version": "rf/v1", "hash": sha_hex({
+        "v": "rf/v1",
+        "category": signals.get("failure_category") or "unknown",
+        "tool": signals.get("tool_identity") or "",
+        "signature": strip_noise(signals.get("error_signature") or ""),
+        "scope": signals.get("scope") or "",
+        "path": strip_noise(signals.get("path") or ""),
+        "line": signals.get("line"),
+    })}
+
+
 def failure_event_id(doc):
     return "fe_" + sha_hex({
         "v": "fe/v1",
@@ -115,7 +150,8 @@ def main():
             raise ValueError(f"invalid state: {state}")
         out = {"ok": True, "terminal_state": state,
                "reflectability": reflectability(state, signals),
-               "failure_event_id": failure_event_id(doc)}
+               "failure_event_id": failure_event_id(doc),
+               "fingerprints": {"reflection": reflection_fingerprint(signals)}}
     except Exception as exc:  # fail-open
         out = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     json.dump(out, sys.stdout, sort_keys=True, separators=(",", ":"),
