@@ -57,7 +57,7 @@ def classify(signals):
         return "success"
     if evidence == "failed":
         return "task_failure"
-    # Steps 5–9 land in Task 2.
+    # Priorities 5–9 implemented here; full A1 golden table lands in Task 2.
     if signals.get("budget_exhausted"):
         return "task_failure"
     if signals.get("verification_required") and not signals.get("verification_performed"):
