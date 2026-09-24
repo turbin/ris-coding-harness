@@ -39,16 +39,66 @@ def base_doc(**signal_overrides):
     }
 
 
-# Task 1 子集；Task 2 替换为全量 A1 表（见计划）。
+# 全量 A1 判定表（23 案例）；后续任务不得删改其期望值。
 GOLDEN_CASES = [
+    # —— 验收 / verdict ——
     ("all_acceptance_passed", {"acceptance_evidence": "passed"}, "success"),
     ("claimed_done_but_tests_failed",
      {"acceptance_evidence": "failed", "final_message": "complete_claim"},
      "task_failure"),
+    ("verdict_pass_beats_incomplete_claim",
+     {"evaluator_verdict": "pass", "final_message": "incomplete_claim"},
+     "success"),
+    ("verdict_fail", {"evaluator_verdict": "fail"}, "task_failure"),
+    # —— agent 表态 / 预算 / 验证 ——
     ("agent_says_incomplete", {"final_message": "incomplete_claim"}, "task_failure"),
+    ("budget_exhausted", {"budget_exhausted": True}, "task_failure"),
+    ("abandoned_after_retries",
+     {"final_message": "incomplete_claim", "budget_exhausted": True},
+     "task_failure"),
+    ("no_evidence_complete_claim", {"final_message": "complete_claim"},
+     "indeterminate"),
+    ("stopped_without_required_verification",
+     {"verification_required": True, "verification_performed": False,
+      "final_message": "complete_claim"},
+     "task_failure"),
+    # —— 正常恢复路径（工具错误不降级）——
+    ("transient_shell_error_then_recovered", {"acceptance_evidence": "passed"},
+     "success"),
+    ("exploratory_grep_failures",
+     {"acceptance_evidence": "passed", "failure_category": "tool_usage_error"},
+     "success"),
+    ("build_broke_then_fixed", {"acceptance_evidence": "passed"}, "success"),
+    ("flaky_test_passed_on_retry",
+     {"acceptance_evidence": "passed", "flaky_retry_passed": True}, "success"),
+    # —— 运行时致命错误（按 origin 分流）——
+    ("external_outage",
+     {"runtime_error": "fatal", "fatal_error_origin": "external"},
+     "infra_failure"),
+    ("hook_script_crash",
+     {"runtime_error": "fatal", "fatal_error_origin": "harness"},
+     "infra_failure"),
+    ("unknown_origin_fatal",
+     {"runtime_error": "fatal", "fatal_error_origin": "unknown"},
+     "infra_failure"),
+    ("agent_broke_environment",
+     {"runtime_error": "fatal", "fatal_error_origin": "agent",
+      "failure_category": "implementation_error"},
+     "task_failure"),
+    ("error_after_prior_success",
+     {"acceptance_evidence": "passed", "runtime_error": "fatal",
+      "fatal_error_origin": "external"},
+     "success"),
+    # —— 用户动作 ——
     ("user_cancelled", {"user_action": "cancel"}, "cancelled"),
     ("user_rejected_result", {"user_action": "rejection"}, "task_failure"),
-    ("cancelled_after_requirement_change", {"user_action": "cancel"}, "cancelled"),
+    ("cancelled_after_requirement_change", {"user_action": "cancel"},
+     "cancelled"),
+    # —— 先例守卫 ——
+    ("cancel_beats_failed_evidence",
+     {"user_action": "cancel", "acceptance_evidence": "failed"}, "cancelled"),
+    ("rejection_beats_pass_verdict",
+     {"user_action": "rejection", "evaluator_verdict": "pass"}, "task_failure"),
 ]
 
 
