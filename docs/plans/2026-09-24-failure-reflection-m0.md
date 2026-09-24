@@ -798,7 +798,7 @@ class Determinism(unittest.TestCase):
 
 ```python
 _LINE_NO_RE = re.compile(r":\d+\b")
-_WIN_PATH_RE = re.compile(r"[A-Za-z]:(?:\\/|/)(?:[^\s\"']+(?:\\/|/))*[^\s\"']+")
+_WIN_PATH_RE = re.compile(r"[A-Za-z]:(?:\\|/)(?:[^\s\"']+(?:\\|/))*[^\s\"']+")
 _UNIX_PATH_RE = re.compile(r"(?:^|(?<=\s))/[^\s\"']+")
 
 
