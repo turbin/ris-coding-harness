@@ -133,6 +133,35 @@ def reflection_fingerprint(signals):
     })}
 
 
+_LINE_NO_RE = re.compile(r":\d+\b")
+_WIN_PATH_RE = re.compile(r"[A-Za-z]:(?:\\|/)(?:[^\s\"']+(?:\\|/))*[^\s\"']+")
+_UNIX_PATH_RE = re.compile(r"(?:^|(?<=\s))/[^\s\"']+")
+
+
+def _basename(match):
+    token = match.group(0)
+    for sep in ("/", "\\"):
+        token = token.split(sep)[-1] if sep in token else token
+    return token
+
+
+def normalize_recurrence(text):
+    text = strip_noise(text or "")
+    text = _LINE_NO_RE.sub(":<LINE>", text)
+    text = _WIN_PATH_RE.sub(_basename, text)
+    text = _UNIX_PATH_RE.sub(_basename, text)
+    return text
+
+
+def recurrence_signature(signals):
+    return {"version": "rs/v1", "hash": sha_hex({
+        "v": "rs/v1",
+        "category": signals.get("failure_category") or "unknown",
+        "scope": signals.get("scope") or "",
+        "signature": normalize_recurrence(signals.get("error_signature") or ""),
+    })}
+
+
 def failure_event_id(doc):
     return "fe_" + sha_hex({
         "v": "fe/v1",
@@ -155,7 +184,8 @@ def main():
         out = {"ok": True, "terminal_state": state,
                "reflectability": reflectability(state, signals),
                "failure_event_id": failure_event_id(doc),
-               "fingerprints": {"reflection": reflection_fingerprint(signals)}}
+               "fingerprints": {"reflection": reflection_fingerprint(signals),
+                                "recurrence": recurrence_signature(signals)}}
     except Exception as exc:  # fail-open
         out = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     json.dump(out, sys.stdout, sort_keys=True, separators=(",", ":"),

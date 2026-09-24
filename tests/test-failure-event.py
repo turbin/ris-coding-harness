@@ -256,5 +256,54 @@ class ReflectionFingerprint(unittest.TestCase):
                          b["fingerprints"]["reflection"]["hash"])
 
 
+class RecurrenceSignature(unittest.TestCase):
+    def test_parser_example_same_recurrence_different_reflection(self):
+        a = run_cli(fp_doc(path="src/parser.py", line=183))
+        b = run_cli(fp_doc(path="src/parser_v2.py", line=241))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+        self.assertEqual(a["fingerprints"]["recurrence"]["hash"],
+                         b["fingerprints"]["recurrence"]["hash"])
+
+    def test_line_only_change_same_recurrence(self):
+        a = run_cli(fp_doc(line=183))
+        b = run_cli(fp_doc(line=190))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+        self.assertEqual(a["fingerprints"]["recurrence"]["hash"],
+                         b["fingerprints"]["recurrence"]["hash"])
+
+    def test_different_category_different_recurrence(self):
+        a = run_cli(fp_doc())
+        b = run_cli(fp_doc(failure_category="requirement_misunderstanding"))
+        self.assertNotEqual(a["fingerprints"]["recurrence"]["hash"],
+                            b["fingerprints"]["recurrence"]["hash"])
+
+    def test_different_scope_different_recurrence(self):
+        a = run_cli(fp_doc())
+        b = run_cli(fp_doc(scope="auth"))
+        self.assertNotEqual(a["fingerprints"]["recurrence"]["hash"],
+                            b["fingerprints"]["recurrence"]["hash"])
+
+    def test_line_number_in_signature_normalized(self):
+        a = run_cli(fp_doc(error_signature="parser.py:183 boom"))
+        b = run_cli(fp_doc(error_signature="parser.py:241 boom"))
+        self.assertEqual(a["fingerprints"]["recurrence"]["hash"],
+                         b["fingerprints"]["recurrence"]["hash"])
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+
+    def test_recurrence_version(self):
+        out = run_cli(fp_doc())
+        self.assertEqual(out["fingerprints"]["recurrence"]["version"], "rs/v1")
+
+
+class Determinism(unittest.TestCase):
+    def test_three_runs_identical_output(self):
+        outputs = [run_cli(fp_doc()) for _ in range(3)]
+        self.assertEqual(outputs[0], outputs[1])
+        self.assertEqual(outputs[1], outputs[2])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
