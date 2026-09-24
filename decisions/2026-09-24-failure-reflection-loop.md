@@ -126,7 +126,7 @@ R8 正式实验需第三臂（generic retry）分离「额外算力」与「结�
 - M0（2026-09-24）：`scripts/failure-event.py` + `tests/test-failure-event.py` +
   `tests/failure-event-smoke.sh` 落地。A1 判定表 23 案例、reflectability 派生、
   fe/v1 / rf/v1 / rs/v1 三级身份与成对 golden、三连跑确定性全部通过
-  （27 个测试方法，unittest 输出 `OK`）。
+  （终审修复波后 33 个测试方法，unittest 输出 `OK`）。
   验收：`bash tests/failure-event-smoke.sh` → 0。
 - 案例计数说明：A1 判定表为 18 行场景 + 先例守卫与 verdict 补充场景，合计 23 案例；
   以 `tests/test-failure-event.py` 的 `GOLDEN_CASES` 实表为准。
