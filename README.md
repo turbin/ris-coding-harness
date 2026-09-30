@@ -201,15 +201,17 @@ graphify 条目与 zvec 分工同属一个注入块，所以 `--search off` 时�
 
 ### legacy 布局自动迁移
 
-对仍是旧布局（`.agents/skills/`、`.rsi/`）的已接入工程，重跑安装器即自动迁移：与受管源**逐字节一致**的文件移入 `.harness/`（或去重删除），被定制过/过旧的文件**原地保留**并逐条报告——安装器只动它能证明是未改受管副本的文件，绝不删除用户内容。
+对仍是旧布局（`.agents/skills/`、`.rsi/`）的已接入工程，重跑安装器即自动迁移：与受管源**逐字节一致**的文件移入 `.harness/`（或去重删除），被定制过/过旧的文件**原地保留**并逐条报告——安装器只动它能证明是未改受管副本的文件，绝不删除用户内容。记录目录（`docs/engineering/`、`decisions/` 等）的 v1 → v2 迁移见下文「布局版本与自动迁移」。
 
 ## 安装内容
 
-核心结构：
+核心结构（**layout v2**：安装器生成的一切都在 `.harness/` 内；仓库根只留 agent 原生入口、工程工作区与 git 产物）：
 
 ```text
-AGENTS.md                         # 轻量上下文路由入口
-docs/engineering/                # 当前工程自己的特殊规则
+AGENTS.md                         # 轻量上下文路由入口（agent 原生发现路径，必须在根）
+CLAUDE.md                         # Claude Code 薄指针（同上）
+.harness/layout-version.txt       # 布局版本标记（v2；迁移判定的事实来源）
+.harness/docs/engineering/        # 当前工程自己的特殊规则（L1）
   index.md                       # 渐进式披露索引
   project.md
   architecture.md
@@ -219,9 +221,16 @@ docs/engineering/                # 当前工程自己的特殊规则
   git.md
   tooling.md
   platform/                      # 平台知识卡（L1P，永不自动 commit，预留知识库导出）
-.rsi/                            # RSI 安全策略（protected files / 变更预算 / 门禁）
+.harness/decisions/               # 架构/技术决策记录（+ index.md）
+.harness/issues/                  # 缺陷与问题记录（+ index.md）
+.harness/progress/                # 任务/里程碑状态（+ index.md）
+.harness/conversations/           # compact-recall 归档（archive/ + index.md；.state/ 本地，已 gitignore）
+.harness/evals/                   # Reviewer verdict 落点（results/ + index.md）
+.harness/.rsi/                    # RSI 安全策略（protected files / 变更预算 / 门禁）
   policy.yaml
   README.md
+.harness/scripts/                 # 受管 hook 脚本副本（compact-archive/session-recall/
+  compact-archive.py 等          # install-agent-hooks/compact-recall.*，随装复制、keep 语义）
 .harness/skills/
   pm-workers-engineering/
     SKILL.md                     # PM-Workers 通用工程 Skill
@@ -239,6 +248,10 @@ docs/engineering/                # 当前工程自己的特殊规则
     SKILL.md                     # 简约阶梯（YAGNI → 复用 → 标准库 → 原生 → 已有依赖 → 一行 → 最小）
     references/                  # review（diff delete-list）/ audit / debt / gain
   rsi-loop/                      # RSI 自改进循环（在本工程的 observe-only 自检模式运行）
+
+# 仓库根的其他内容（工程工作区，非 harness 机制）
+src/  tests/  docs/  output/  tmp/  scripts/     # scripts/ 供 G6 的 setup-env 约定使用
+.gitignore  .git/
 ```
 
 用户级 Skill **不**进 `.harness/skills/`，而是每次安装时落到各 agent 的用户级目录（由 `.harness/skill-scope.txt` 指定，默认全部 agent）：
@@ -255,18 +268,30 @@ docs/engineering/                # 当前工程自己的特殊规则
 
 使用 `--agent` 时，`project` 级 Skill 还会按参数表复制到 `.claude/skills/`、`.pi/skills/`、`.kimi/skills/`、`.opencode/skills/`、`.codex/skills/`、`.agents/skills/` 等对应目录；`user` 级 Skill 只按清单的 `agents` 列进用户目录，不进工程内目录。
 
-`init` 模式还会创建 `src/`、`tests/`、`docs/`、`decisions/`、`issues/`、`conversations/`、`output/`、`progress/`、`scripts/`、`tmp/`、`evals/results/`（及 `evals/` 索引）。
+`init` 模式还会创建根级工作区 `src/`、`tests/`、`docs/`、`output/`、`tmp/`、`scripts/`（各带 `index.md`），以及 `.harness/evals/results/`（及 `.harness/evals/` 索引）；`decisions/`、`issues/`、`progress/` 的目录与索引则无论何种模式都建在 `.harness/` 下。
+
+### 布局版本与自动迁移（layout v1 → v2）
+
+`.harness/layout-version.txt` 记录目标工程的布局版本，安装器每次运行都会读取它决定行为：
+
+| 检测到的版本 | 判定依据 | 安装器行为 |
+|---|---|---|
+| **v2**（当前） | 标记文件内容为 `2` | 正常安装/修复 |
+| **v1**（旧布局） | 无标记文件但存在 `.harness/` | 先迁移：把根级 `docs/engineering/`、`decisions/`、`issues/`、`progress/`、`conversations/`、`evals/` 整体移入 `.harness/`，再按 v2 安装 |
+| **全新**（版本 0） | 无 `.harness/` | 直接按 v2 安装（工程自带的同名根目录**不**被当作 v1 产物，绝不触碰） |
+
+迁移的三条安全规则：① 记录目录承载工程数据，**整体搬移**（不适用「逐字节一致才动」的受管副本规则）；② 目标位置已存在同名文件时**保留根级副本**并打印 `conflict` 行，绝不覆盖或删除数据；③ 与 v1 模板逐字节一致的 `.harness/.rsi/policy.yaml` 自动升级为 v2 路径版本，被定制过的保持原样。`--check` 会把 v1 残留报告为 `legacy` 行但不判失败，并提示重跑安装器修复。
 
 ## 使用方法
 
 ### 1. 安装后补齐工程规则
 
-安装完成后，填写目标工程中的 `docs/engineering/index.md`，以及只与本工程相关的规则文件（架构、编码、测试、性能、Git、工具链）。这些规则是 L1 层资产，也是 RSI 闭环默认允许自动改进的对象（`docs/engineering/platform/` 下的平台知识卡除外——它们属 L1P 层，永不自动 commit）。
+安装完成后，填写目标工程中的 `.harness/docs/engineering/index.md`，以及只与本工程相关的规则文件（架构、编码、测试、性能、Git、工具链）。这些规则是 L1 层资产，也是 RSI 闭环默认允许自动改进的对象（`.harness/docs/engineering/platform/` 下的平台知识卡除外——它们属 L1P 层，永不自动 commit）。
 
 也可以不手填：Skill 内置基础设施 onboarding 程序（`project-onboarding.md`）——首个涉及构建/测试的任务触发时，agent 会自动处理：
 
 - **已有工程（adopt）**：扫描 manifest、CI 配置、测试框架等仓库证据，起草 `tooling.md` / `testing.md`，未覆盖项标记 `UNKNOWN` 并向你确认；
-- **新工程（init）**：推荐主流技术栈并询问确认，选择结果写入规则文件，重要选型记入 `decisions/`。
+- **新工程（init）**：推荐主流技术栈并询问确认，选择结果写入规则文件，重要选型记入 `.harness/decisions/`。
 
 硬性规则：agent 不得臆造 build/test 命令——规则文件和仓库证据都缺时会停下来问你（SKILL.md §13 停机条件）。spec/plan 只引用规则文件，不重复承载基础设施信息。
 
@@ -297,7 +322,7 @@ docs/engineering/                # 当前工程自己的特殊规则
 
 要求：PM 拆解 → Coder TDD → Reviewer 对抗审阅；里程碑必须拿到
 MILESTONE ACCEPTED；每个里程碑决定按 verdict-schema.md 输出 YAML verdict
-到 evals/results/；完成后给出 PM 汇报（DONE / PARTIAL / BLOCKED）。
+到 `.harness/evals/results/`；完成后给出 PM 汇报（DONE / PARTIAL / BLOCKED）。
 ```
 
 Skill 带参数调用（支持斜杠命令的 agent）：参数会直接传给 Skill，可用于指定 plan/spec：
@@ -323,7 +348,7 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 ```
 
 - 运行环境支持子代理时（如 Claude Code subagents、Kimi Code Agent 工具、pi subagent），PM / Coder / Reviewer 会以逻辑独立的角色执行；不支持时按顺序扮演，但 Reviewer 验收门禁不可省略。
-- Agent 工作时的上下文加载顺序：`AGENTS.md` → `docs/engineering/index.md` → 任务相关规则 → Skill 角色 references（渐进式披露）。
+- Agent 工作时的上下文加载顺序：`AGENTS.md` → `.harness/docs/engineering/index.md` → 任务相关规则 → Skill 角色 references（渐进式披露）。
 - 里程碑必须经 Reviewer 验收（`MILESTONE ACCEPTED`）才算完成，不允许实现阶段自我批准。
 
 > 当前版本为「单任务全自动」：每次任务需发起一次。跨任务无人值守循环（`rsi-loop`）见下方 Phase 5。
@@ -335,7 +360,7 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 | Phase | 内容 | 状态 |
 |---|---|---|
 | 0 | 三层自改进边界（L1 规则 / L2 Skill / L3 Harness）+ 安全门禁 | ✅ 已实施（`.harness/.rsi/policy.yaml`） |
-| 1 | 结构化 Reviewer verdict + 结果落账 `evals/results/` | ✅ 已实施（`verdict-schema.md`） |
+| 1 | 结构化 Reviewer verdict + 结果落账 `.harness/evals/results/` | ✅ 已实施（`verdict-schema.md`） |
 | 2 | eval 任务集 + pass@1 基线（RSI 的"损失函数"） | ✅ 已实施（`evals/`，20 任务 + `run-eval.sh`，基线 20/20） |
 | 3 | retro 归因 + L1 规则回写（第一次完整闭环） | ✅ 已实施（`progress/retro/`、`scripts/retro-aggregate.py`、提案 P1-P3 已落地） |
 | 4 | L2 Skill 自改进（eval 驱动） | ✅ 已实施（SKILL.md v1.1.0，RED 证据最小形式，eval 验证） |
@@ -363,7 +388,7 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 
 ### 5. 跨会话对话记忆（compact-recall）
 
-把每次上下文压缩（`/compact` 或自动压缩）产生的摘要原文归档到工程内 `conversations/`，新 session 首次提问时自动注入近期归档简报——模型被要求"回顾之前的工作"时可按时间远近检索并读取摘要，跨会话不丢上下文。**install 阶段按 `--agent` 选择自动完成各 agent 的 hook 适配**：
+把每次上下文压缩（`/compact` 或自动压缩）产生的摘要原文归档到工程内 `.harness/conversations/`（旧布局工程为根级 `conversations/`，脚本自动回退），新 session 首次提问时自动注入近期归档简报——模型被要求"回顾之前的工作"时可按时间远近检索并读取摘要，跨会话不丢上下文。**install 阶段按 `--agent` 选择自动完成各 agent 的 hook 适配**：
 
 | Agent | 适配机制 | 安装位置（project 作用域） |
 |---|---|---|
@@ -376,18 +401,18 @@ Request → PM 拆解 → Coder TDD → Coder 自审 → Reviewer 对抗式审�
 ```bash
 ./install.sh --target . --agent claude,codex        # 装 skill 的同时适配并注册 hooks
 ./install.sh --target . --agent all --scope user    # 全 agent、用户级目录
-# 已装工程补装/重装某个 agent 的 hooks：
-python scripts/install-agent-hooks.py pi --target . --scope project
+# 已装工程补装/重装某个 agent 的 hooks（受管副本在 .harness/scripts/）：
+python .harness/scripts/install-agent-hooks.py pi --target . --scope project
 ```
 
-- **数据**：`conversations/archive/<session_id>/<compact_time>.md`（摘要原文，front matter 含 session id、标题、cwd、时间、manual/auto 来源）；`conversations/index.md` 为倒序索引表（越新越可信）；`conversations/.state/` 为本地 marker（已 gitignore）。
+- **数据**：`.harness/conversations/archive/<session_id>/<compact_time>.md`（摘要原文，front matter 含 session id、标题、cwd、时间、manual/auto 来源）；`.harness/conversations/index.md` 为倒序索引表（越新越可信）；`.harness/conversations/.state/` 为本地 marker（已 gitignore）。旧布局工程沿用根级 `conversations/`，两个脚本按「哪边有 index.md」判定位置，保证归档与回顾读同一索引。
 - **幂等**：重复执行只替换受管块/受管组，不动其他配置；卸载＝删除对应配置里的受管段（kimi 标记块、claude/codex 含 compact-archive/session-recall 的组、pi/opencode 的 adapter 文件）。
 - **生效时机**：hook 配置变更在 TUI 里 `/reload` 立即生效（或下次启动自动加载）；工程级 skill 由**新会话**加载，已开启的会话不可见。
-- **机制**：压缩归档 fail-open（失败不影响压缩）；回顾注入每 session 一次、索引更新后重发。归档只读 agent 会话数据。工程目录解析顺序为 payload `cwd`（**须为绝对路径**）→ `session_index.jsonl` 的 `workDir`，**不回退 `os.getcwd()`**（hook 可能由服务进程拉起、cwd 不可信，见 `issues/2026-09-20-hook-payload-cwd-fallback.md`）；每次归档动作在 `conversations/.state/archive-log.jsonl` 追加回执（事件日志语义：去重重跑亦追加，一行一次动作）；payload 缺 `session_title` 时优先取会话 `state.json` 的 `title`、再回退 `lastPrompt` 首行（仅 kimi wire 流可查会话目录；claude/codex 内联摘要保持空标题）。kimi 以外 agent 的摘要来源：claude 取 payload `compact_summary`，codex 取 transcript `type:"compacted"` 行，pi/opencode 由 TS 适配器从事件/会话中取后喂同一契约。
-- **自检**：`python scripts/install-agent-hooks.py kimi --check` 校验寄宿脚本与仓库源逐字节一致、受管块指向用户级 hooks 目录（漂移 exit 1，只报告不修复——安装本身才是修复动作）。
+- **机制**：压缩归档 fail-open（失败不影响压缩）；回顾注入每 session 一次、索引更新后重发。归档只读 agent 会话数据。工程目录解析顺序为 payload `cwd`（**须为绝对路径**）→ `session_index.jsonl` 的 `workDir`，**不回退 `os.getcwd()`**（hook 可能由服务进程拉起、cwd 不可信，见 `issues/2026-09-20-hook-payload-cwd-fallback.md`）；每次归档动作在 `.harness/conversations/.state/archive-log.jsonl` 追加回执（事件日志语义：去重重跑亦追加，一行一次动作）；payload 缺 `session_title` 时优先取会话 `state.json` 的 `title`、再回退 `lastPrompt` 首行（仅 kimi wire 流可查会话目录；claude/codex 内联摘要保持空标题）。kimi 以外 agent 的摘要来源：claude 取 payload `compact_summary`，codex 取 transcript `type:"compacted"` 行，pi/opencode 由 TS 适配器从事件/会话中取后喂同一契约。
+- **自检**：`python .harness/scripts/install-agent-hooks.py kimi --check` 校验寄宿脚本与仓库源逐字节一致、受管块指向用户级 hooks 目录（漂移 exit 1，只报告不修复——安装本身才是修复动作）。旧布局工程根级 `scripts/` 里的同名受管副本会在重跑安装器时自动迁入 `.harness/scripts/`（逐字节一致才动，工程自有的 `setup-env.sh` 等不受影响）。
 - **使用注意**：codex 需在 CLI 里 `/hooks` 审核信任一次；pi 工程级 extension 需要项目信任（交互批准，或 headless 用 `--approve` / `defaultProjectTrust: always`）；claude 的 hook 在 Windows 上默认 Git Bash 执行。pi/opencode 适配器依赖 python（`python`/`python3`/`py`）在 PATH。
-- **模型侧约定**：根 `AGENTS.md` 内置回顾路由——先读 `conversations/index.md` 选条目，再读归档原文；引用注明时间与 session id，旧摘要以仓库现状核实。
-- **隐私**：摘要可能含代码片段与文件路径，属本地工程数据；提交/分享前请自查 `conversations/archive/` 内容。
+- **模型侧约定**：根 `AGENTS.md` 内置回顾路由——先读 `.harness/conversations/index.md` 选条目，再读归档原文；引用注明时间与 session id，旧摘要以仓库现状核实。
+- **隐私**：摘要可能含代码片段与文件路径，属本地工程数据；提交/分享前请自查 `.harness/conversations/archive/` 内容。
 
 ## 设计原则
 
@@ -395,11 +420,11 @@ python scripts/install-agent-hooks.py pi --target . --scope project
 
 Skill 只定义稳定的协作协议：PM 拆解与编排、Coder TDD、Reviewer 对抗式审阅、里程碑门禁、简洁性和资源约束。
 
-具体项目的语言、框架、架构、测试命令、性能上限、Git 流程等，放在 `docs/engineering/`，由 `index.md` 按任务需要渐进加载。
+具体项目的语言、框架、架构、测试命令、性能上限、Git 流程等，放在 `.harness/docs/engineering/`，由 `index.md` 按任务需要渐进加载。
 
 ### 2. AGENTS.md 是路由器，不是大而全手册
 
-Agent 首先读取 `AGENTS.md`，再读取 `docs/engineering/index.md`，只加载当前任务需要的规则和源码上下文。
+Agent 首先读取 `AGENTS.md`，再读取 `.harness/docs/engineering/index.md`，只加载当前任务需要的规则和源码上下文。
 
 ### 3. 已有工程不强制迁移
 
@@ -421,7 +446,7 @@ pwsh ./tests/install-smoke.ps1  # Windows（PowerShell 5.1+ / pwsh 7+）
 ./evals/run-eval.sh verdicts    # verdict yaml 机械校验（schema v2，v1 兼容告警）
 ```
 
-覆盖：`init`/`adopt` 自动模式判断、核心文件落位（含 `.harness/.rsi/` 策略与 `evals/results/`）、已有工程不被重排、重复执行的非破坏性、`--agent` 多目标分发与重复传参、未知 agent 的 fail-fast、`--check` 三态（missing / ok / incomplete）与零写入保证、退出码契约（用法错误 = 2）、env 阶段四态（dry-run 不执行 / 失败仅告警 / `--strict-env` 退出 3 / `--skip-env` 零写入）、AGENTS.md/CLAUDE.md 标记合并与刷新幂等、legacy 布局自动迁移（同件搬走 / 定制留原地）。
+覆盖：`init`/`adopt` 自动模式判断、核心文件落位（含 `.harness/.rsi/` 策略、`.harness/scripts/` hook 副本、`.harness/evals/results/`、`.harness/` 记录目录与 `layout-version.txt`）、已有工程不被重排、重复执行的非破坏性、`--agent` 多目标分发与重复传参、未知 agent 的 fail-fast、`--check` 三态（missing / ok / incomplete）与零写入保证、退出码契约（用法错误 = 2）、env 阶段四态（dry-run 不执行 / 失败仅告警 / `--strict-env` 退出 3 / `--skip-env` 零写入）、AGENTS.md/CLAUDE.md 标记合并与刷新幂等、legacy 布局自动迁移（同件搬走 / 定制留原地）、layout v1 → v2 记录目录迁移（含目标冲突保留根级副本、v1 policy 升级、幂等重跑）。
 
 ## 旧入口
 

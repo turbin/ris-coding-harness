@@ -3,6 +3,14 @@
 版本：v0.5（Phase 0-5 已实施；L1P 平台层 / 约束冲突门 / 事件触发 / 任务成本预算已实施）
 日期：2026-09-18
 
+> **布局版本说明（2026-09-30，layout v2）**：安装器在目标工程生成的目录已全部收敛
+> `.harness/` 内（`docs/engineering/`、`decisions/`、`issues/`、`progress/`、
+> `conversations/`、`evals/` 均迁入；见 `docs/harness-design-goals.md` G1 v2 修订）。
+> 本文中的目标工程路径若写成根级形式，均指 **pre-v2 布局**；预置的 v1 工程重跑安装器
+> 会按 `.harness/layout-version.txt` 自动迁移。文中 `progress/loop/`、`progress/retro/`、
+> `evals/baseline.json`、`decisions/` 等描述的 **harness 仓库自身**布局，目前仍在仓库根
+> （仓库同构托管见 G1 Q4，自迁移与否由维护者决定）。
+
 ## 1. 背景与目标
 
 本仓库当前是一套「安装器 + PM-Workers 静态协作 Skill」：

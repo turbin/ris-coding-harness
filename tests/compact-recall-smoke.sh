@@ -261,8 +261,8 @@ printf '%s\n' "{\"sessionId\":\"$SESSION_ID3\",\"sessionDir\":\"$SESSION_DIR3\",
 mkdir -p "$FAKE_HOME/relative-proj"
 printf '%s' "{\"hook_event_name\":\"PostCompact\",\"session_id\":\"$SESSION_ID3\"}" \
   | ( cd "$NEUTRAL" && KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/compact-archive.py" >/dev/null 2>&1 )
-[ -f "$FAKE_HOME/relative-proj/conversations/archive/$SESSION_ID3/2026-01-04T00-00-00Z.md" ] \
-  && ok "relative workDir resolves against KIMI_CODE_HOME" \
+[ -f "$FAKE_HOME/relative-proj/.harness/conversations/archive/$SESSION_ID3/2026-01-04T00-00-00Z.md" ] \
+  && ok "relative workDir resolves against KIMI_CODE_HOME (v2 layout)" \
   || bad "relative workDir not resolved"
 
 # 16) title fallback from state.json lastPrompt when payload has no title
@@ -328,6 +328,37 @@ else
   bad "relative payload cwd accepted as project root (process-cwd anchored write)"
 fi
 
+# 20) layout v2: a project whose conversations state lives under
+#     .harness/conversations gets its archive there (managed path wins when its
+#     index.md exists), and recall reads the same index.
+V2PROJ="$WORK/v2proj"
+mkdir -p "$V2PROJ/.harness/conversations"
+printf '# Index\n\n| Time | File | Summary |\n|---|---|---|\n' > "$V2PROJ/.harness/conversations/index.md"
+printf '%s' "{\"hook_event_name\":\"PostCompact\",\"session_id\":\"$SESSION_ID\",\"session_title\":\"smoke\",\"cwd\":\"$V2PROJ\"}" \
+  | KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/compact-archive.py" >/dev/null 2>&1
+if compgen -G "$V2PROJ/.harness/conversations/archive/$SESSION_ID/*.md" >/dev/null \
+   && [ ! -e "$V2PROJ/conversations" ]; then
+  ok "layout v2 archives under .harness/conversations"
+else
+  bad "layout v2 archive not written under .harness/conversations"
+fi
+RECALL_V2="$(printf '%s' "{\"hook_event_name\":\"UserPromptSubmit\",\"session_id\":\"sess-v2\",\"cwd\":\"$V2PROJ\"}" \
+  | KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/session-recall.py" 2>/dev/null)"
+case "$RECALL_V2" in
+  *".harness/conversations"*) ok "layout v2 briefing names .harness/conversations" ;;
+  *) bad "layout v2 briefing path wrong: ${RECALL_V2:0:120}" ;;
+esac
+
+# 21) legacy layout fallback: the pre-v2 root conversations/ of this scratch
+#     project is still archived into and recalled from.
+RECALL_LEGACY="$(printf '%s' "{\"hook_event_name\":\"UserPromptSubmit\",\"session_id\":\"sess-legacy\",\"cwd\":\"$PROJ\"}" \
+  | KIMI_CODE_HOME="$FAKE_HOME" "$PY" "$ROOT/scripts/session-recall.py" 2>/dev/null)"
+case "$RECALL_LEGACY" in
+  *"conversations/index.md"*) ok "pre-v2 briefing still points at root conversations/" ;;
+  *) bad "pre-v2 briefing path wrong: ${RECALL_LEGACY:0:120}" ;;
+esac
+
 echo
 echo "passed: $pass  failed: $fail"
+
 [ "$fail" -eq 0 ]

@@ -56,19 +56,25 @@ If `AGENTS.md` exists, treat it primarily as a **routing/index document**. Follo
 
 When the repository follows the canonical initialized layout used by this skill, project-specific engineering conventions live under:
 
-`docs/engineering/`
+`.harness/docs/engineering/`
+
+> Layout note (v2, 2026-09-30): every installer-managed directory lives under
+> `.harness/` — engineering rules, `decisions/`, `issues/`, `progress/`,
+> `conversations/`, `evals/`. In pre-v2 projects the same directories sit at
+> the repository root; check `.harness/layout-version.txt` (absent marker with
+> a root `.harness/` dir means v1) and resolve paths accordingly.
 
 Recommended contents:
 
-- `docs/engineering/index.md` — rule catalog and loading hints
-- `docs/engineering/project.md` — project-specific constraints and invariants
-- `docs/engineering/architecture.md` — architecture/module boundary rules
-- `docs/engineering/coding.md` — language/style/implementation rules
-- `docs/engineering/testing.md` — test strategy and commands
-- `docs/engineering/performance.md` — runtime, memory, concurrency, latency constraints
-- `docs/engineering/git.md` — branch/commit/review conventions
-- `docs/engineering/tooling.md` — build/lint/test/dev commands
-- `docs/engineering/platform/<platform>/*.md` — platform-specific knowledge cards; load only cards matching the current runtime (see `references/platform-knowledge.md`)
+- `.harness/docs/engineering/index.md` — rule catalog and loading hints
+- `.harness/docs/engineering/project.md` — project-specific constraints and invariants
+- `.harness/docs/engineering/architecture.md` — architecture/module boundary rules
+- `.harness/docs/engineering/coding.md` — language/style/implementation rules
+- `.harness/docs/engineering/testing.md` — test strategy and commands
+- `.harness/docs/engineering/performance.md` — runtime, memory, concurrency, latency constraints
+- `.harness/docs/engineering/git.md` — branch/commit/review conventions
+- `.harness/docs/engineering/tooling.md` — build/lint/test/dev commands
+- `.harness/docs/engineering/platform/<platform>/*.md` — platform-specific knowledge cards; load only cards matching the current runtime (see `references/platform-knowledge.md`)
 
 These names are defaults, not hard requirements. If the project points elsewhere, follow the project.
 
@@ -76,7 +82,7 @@ These names are defaults, not hard requirements. If the project points elsewhere
 
 If the repository uses another layout, adapt to it.
 
-Do **not** create `docs/engineering/`, `src/`, `tests/`, `progress/`, or any other canonical directory merely because this skill knows about them.
+Do **not** create `.harness/docs/engineering/`, `src/`, `tests/`, `progress/`, or any other canonical directory merely because this skill knows about them.
 
 Only create or migrate engineering structure when:
 
@@ -170,12 +176,12 @@ When the repository uses the initialized engineering layout, use directory seman
 - `src/` — production/source implementation
 - `tests/` — tests; preferably mirrors source/module structure when project rules say so
 - `docs/` — documentation and design material
-- `docs/engineering/` — project-specific engineering rules and conventions
-- `decisions/` — architecture/technical decisions and significant rationale
-- `issues/` — tracked defects/problems and reproducible failure descriptions
-- `conversations/` — only user-explicitly-requested saved conversation records
+- `.harness/docs/engineering/` — project-specific engineering rules and conventions
+- `.harness/decisions/` — architecture/technical decisions and significant rationale
+- `.harness/issues/` — tracked defects/problems and reproducible failure descriptions
+- `.harness/conversations/` — only user-explicitly-requested saved conversation records
 - `output/` — build/release/delivery artifacts and descriptions
-- `progress/` — active task and milestone state for interruption/recovery
+- `.harness/progress/` — active task and milestone state for interruption/recovery
 - `scripts/` — build/deploy/data/maintenance helper scripts
 - `tmp/` — disposable/intermediate artifacts
 
@@ -321,10 +327,10 @@ Re-run the relevant verification after refactoring.
 Verification runs as two distinct stages with separate evidence:
 
 1. **BUILD** — build/compile the affected artifacts with the exact command
-   from `docs/engineering/tooling.md` (or equivalent repository evidence).
+   from `.harness/docs/engineering/tooling.md` (or equivalent repository evidence).
    Record command, exit code, and output location.
 2. **TEST** — run the relevant tests with the exact command from
-   `docs/engineering/testing.md` (or equivalent). Record command, exit
+   `.harness/docs/engineering/testing.md` (or equivalent). Record command, exit
    code, pass/fail counts, and log location.
 
 Build failures and test failures are different problems — always record
@@ -490,20 +496,20 @@ Do not introduce these patterns solely because the skill mentions them; first co
 
 # 12. Historical records and repository artifacts
 
-When the canonical initialized layout exists:
+When the canonical initialized layout exists (layout v2 paths shown; pre-v2 projects keep the same directories at the repository root):
 
-- significant architecture/design choices → `decisions/`
-- reproducible bugs/problems → `issues/`
-- active long-running task state → `progress/`
-- user-requested conversation archival → `conversations/`
+- significant architecture/design choices → `.harness/decisions/`
+- reproducible bugs/problems → `.harness/issues/`
+- active long-running task state → `.harness/progress/`
+- user-requested conversation archival → `.harness/conversations/`
 - delivery/build/release descriptions → `output/`
-- structured review verdicts → `evals/results/`
-- platform-specific fix knowledge → `docs/engineering/platform/<platform>/` knowledge cards
+- structured review verdicts → `.harness/evals/results/`
+- platform-specific fix knowledge → `.harness/docs/engineering/platform/<platform>/` knowledge cards
 - disposable working artifacts → `tmp/`
 
 ## Issue recording duty
 
-Every problem discovered during a task that is **not fixed within that task** must be recorded in `issues/` (or the project's native tracker when the project defines one). This includes:
+Every problem discovered during a task that is **not fixed within that task** must be recorded in `.harness/issues/` (or the project's native tracker when the project defines one; pre-v2 projects: root `issues/`). This includes:
 
 - defects or smells noticed while working that fall outside the current scope;
 - MAJOR findings the Reviewer accepted under project/user policy;
@@ -575,13 +581,13 @@ performs the task commit **only when the task-level commit gate allows it**
 (the `task_commit` section of `.harness/.rsi/policy.yaml`, or the project equivalent):
 
 - `observe-only` — do not commit; leave the work in the working tree, verdict recorded, and state the pending state in the PM report.
-- `auto` — commit automatically: stage only files this task touched plus protocol artifacts (`evals/results/`, `issues/`, `progress/`); never `git add -A`; never push.
+- `auto` — commit automatically: stage only files this task touched plus protocol artifacts (`.harness/evals/results/`, `.harness/issues/`, `.harness/progress/`); never `git add -A`; never push.
 - `manual` — stage and prepare the commit message, then ask the user before committing.
 
 Commit message format: `task <task-id> <milestone>: <summary>` — task-level
 namespace, distinct from rsi-loop mutation commits (proposal IDs).
 
-Files under `docs/engineering/platform/` (L1P platform knowledge cards) are
+Files under `.harness/docs/engineering/platform/` (L1P platform knowledge cards) are
 **never** included in an automatic commit; they stay listed in the PM report
 as awaiting human commit. If a pre-commit protection hook is installed
 (e.g. `scripts/rsi-protect.sh`), a commit touching protected files or L1P
@@ -615,15 +621,15 @@ Cross-task reflection, retro, and rule writeback are orchestrated by the
 `rsi-loop` skill (`skills/rsi-loop/`), not by this per-task protocol. This
 skill's obligations toward that loop:
 
-- structured verdicts land in `evals/results/` (§8, §12);
-- problems discovered but not fixed are recorded in `issues/` (§12);
+- structured verdicts land in `.harness/evals/results/` (§8, §12);
+- problems discovered but not fixed are recorded in `.harness/issues/` (§12);
 - **platform-specific fix knowledge** (e.g. a Windows-only workaround) is
   captured as a platform knowledge card per `references/platform-knowledge.md`
   instead of a generic coding rule — cards live in
-  `docs/engineering/platform/<platform>/`, are **never auto-committed**, and
+  `.harness/docs/engineering/platform/<platform>/`, are **never auto-committed**, and
   are listed in the PM report as awaiting human commit;
 - every mutation proposal passes the rule conflict check per
   `references/rule-conflict-check.md` before it is applied — duplicate /
   wording conflicts may be auto-merged; directional, cross-layer, or
   oscillation conflicts pause the proposal for user arbitration, and the
-  ruling is recorded in `decisions/`.
+  ruling is recorded in `.harness/decisions/`.

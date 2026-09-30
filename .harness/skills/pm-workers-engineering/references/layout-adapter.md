@@ -8,14 +8,18 @@ When present, interpret:
 - `src/` — source implementation
 - `tests/` — tests
 - `docs/` — product/technical documentation
-- `docs/engineering/` — project-specific engineering rules
-- `decisions/` — design/architecture decision history
-- `issues/` — bug/problem history and reproduction information
-- `conversations/` — user-explicit archival only
+- `.harness/docs/engineering/` — project-specific engineering rules
+- `.harness/decisions/` — design/architecture decision history
+- `.harness/issues/` — bug/problem history and reproduction information
+- `.harness/conversations/` — user-explicit archival only
 - `output/` — delivery/build/release artifacts
-- `progress/` — active task/milestone state
+- `.harness/progress/` — active task/milestone state
 - `scripts/` — helper automation
 - `tmp/` — disposable intermediate data
+
+Layout v2 (2026-09-30) keeps every installer-managed record directory under
+`.harness/`; pre-v2 projects have the same four directories (`decisions/`,
+`issues/`, `progress/`, `conversations/`) at the repository root instead.
 
 Each available `index.md` is a navigation surface and should be consulted before opening many child files.
 

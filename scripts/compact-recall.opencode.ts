@@ -3,16 +3,24 @@
 // ~/.config/opencode/plugins/compact-recall.ts (global).
 //
 // Bridges opencode plugin hooks to the harness shell contract:
-//   session.compacted event -> scripts/compact-archive.py  (archive summary)
-//   chat.message hook       -> scripts/session-recall.py   (recall briefing)
+//   session.compacted event -> .harness/scripts/compact-archive.py  (archive summary)
+//   chat.message hook       -> .harness/scripts/session-recall.py   (recall briefing)
 // Fail-open: any error is logged and swallowed; opencode's flow is never
 // blocked. Requires python (python/python3/py) on PATH at runtime.
 
 import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
 import * as path from "node:path";
 
-const ARCHIVE = path.join(process.cwd(), "scripts", "compact-archive.py");
-const RECALL = path.join(process.cwd(), "scripts", "session-recall.py");
+// Managed copies live under .harness/scripts/ (G1); fall back to root scripts/
+// for the self-hosted harness repo and projects not yet re-installed.
+function projectScript(name: string): string {
+	const managed = path.join(process.cwd(), ".harness", "scripts", name);
+	return fs.existsSync(managed) ? managed : path.join(process.cwd(), "scripts", name);
+}
+
+const ARCHIVE = projectScript("compact-archive.py");
+const RECALL = projectScript("session-recall.py");
 
 function runScript(script: string, payload: Record<string, unknown>): string | null {
 	for (const py of ["python", "python3", "py"]) {

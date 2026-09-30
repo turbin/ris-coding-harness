@@ -27,13 +27,37 @@ grep -qF '<!-- ris-coding-harness:begin -->' "$TMP/new/AGENTS.md"
 grep -qF '<!-- ris-coding-harness:begin -->' "$TMP/new/CLAUDE.md"
 test -f "$TMP/new/src/index.md"
 test -f "$TMP/new/tests/index.md"
-test -f "$TMP/new/docs/engineering/index.md"
-test -f "$TMP/new/docs/engineering/platform/index.md"
+# Layout v2: every installer-managed record directory lives under .harness/.
+test -f "$TMP/new/.harness/docs/engineering/index.md"
+test -f "$TMP/new/.harness/docs/engineering/platform/index.md"
 test -f "$TMP/new/.harness/skills/pm-workers-engineering/SKILL.md"
 test -f "$TMP/new/.harness/skills/rsi-loop/SKILL.md"
 test -f "$TMP/new/.harness/skills/rsi-loop/references/preflight.md"
 test -f "$TMP/new/.harness/.rsi/policy.yaml"
 test -f "$TMP/new/.harness/manifest.json"
+test -f "$TMP/new/.harness/decisions/index.md"
+test -f "$TMP/new/.harness/issues/index.md"
+test -f "$TMP/new/.harness/progress/index.md"
+test -d "$TMP/new/.harness/conversations/archive"
+test -d "$TMP/new/.harness/conversations/.state"
+test -f "$TMP/new/.harness/layout-version.txt"
+grep -qx '2' "$TMP/new/.harness/layout-version.txt"
+# Root level keeps only project workspace + agent-native entries: no
+# installer-managed record directories at the root (layout v2).
+test ! -e "$TMP/new/docs/engineering"
+test ! -e "$TMP/new/decisions"
+test ! -e "$TMP/new/issues"
+test ! -e "$TMP/new/progress"
+test ! -e "$TMP/new/conversations"
+test ! -e "$TMP/new/evals"
+# Hook script copies are harness mechanism (G1): they land under
+# .harness/scripts/, never in the project-owned root scripts/.
+test -f "$TMP/new/.harness/scripts/compact-archive.py"
+test -f "$TMP/new/.harness/scripts/session-recall.py"
+test -f "$TMP/new/.harness/scripts/install-agent-hooks.py"
+test ! -e "$TMP/new/scripts/compact-archive.py"
+test ! -e "$TMP/new/scripts/session-recall.py"
+test ! -e "$TMP/new/scripts/install-agent-hooks.py"
 grep -q '"schema_version"' "$TMP/new/.harness/manifest.json"
 grep -q '"sha256"' "$TMP/new/.harness/manifest.json"
 # Manifest records the two scopes: project skills, user skills, and where the
@@ -50,7 +74,8 @@ grep -q '"skill_scope": {[^}]*"c4-architecture": "user"' "$TMP/new/.harness/mani
 grep -q '"skill_scope": {[^}]*"mermaid-diagrams": "user"' "$TMP/new/.harness/manifest.json"
 grep -qF "\"user_agent_destinations\": [\"$HOME/.claude/skills\"" "$TMP/new/.harness/manifest.json"
 grep -qF "$HOME/.kimi-code/skills" "$TMP/new/.harness/manifest.json"
-test -d "$TMP/new/evals/results"
+grep -q '"layout_version": 2' "$TMP/new/.harness/manifest.json"
+test -d "$TMP/new/.harness/evals/results"
 
 # Both vendored diagram skills are user-level (.harness/skill-scope.txt): they
 # land in the agent user directories and never inside the project.
@@ -73,7 +98,7 @@ grep -q 'zvec is the default fuzzy-search layer' "$TMP/new/AGENTS.md"
 
 # Existing project should be adopted without canonical source/test directories.
 test -f "$TMP/existing/AGENTS.md"
-test -f "$TMP/existing/docs/engineering/index.md"
+test -f "$TMP/existing/.harness/docs/engineering/index.md"
 test -f "$TMP/existing/.harness/skills/pm-workers-engineering/SKILL.md"
 test -f "$TMP/existing/.harness/skills/rsi-loop/SKILL.md"
 test ! -e "$TMP/existing/src"
@@ -91,9 +116,9 @@ grep -qF '<!-- ris-coding-harness:begin -->' "$TMP/existing/AGENTS.md"
 grep -q 'do not touch' "$TMP/existing/AGENTS.md"
 
 # Re-running must be non-destructive without --force.
-printf '%s\n' '# local customization' > "$TMP/existing/docs/engineering/coding.md"
+printf '%s\n' '# local customization' > "$TMP/existing/.harness/docs/engineering/coding.md"
 "$ROOT/install.sh" --target "$TMP/existing" --mode adopt --no-git >/dev/null
-grep -q '^# local customization$' "$TMP/existing/docs/engineering/coding.md"
+grep -q '^# local customization$' "$TMP/existing/.harness/docs/engineering/coding.md"
 
 # --agent distributes the project skills to each requested agent directory
 # (plus canonical .harness); user-level skills stay in the user directories.
@@ -157,7 +182,7 @@ fi
 printf '%s\n' "$out" | grep -q 'incomplete'
 "$ROOT/install.sh" --target "$TMP/existing" --mode adopt --no-git >/dev/null
 "$ROOT/install.sh" --target "$TMP/existing" --check >/dev/null
-grep -q '^# local customization$' "$TMP/existing/docs/engineering/coding.md"
+grep -q '^# local customization$' "$TMP/existing/.harness/docs/engineering/coding.md"
 
 # A missing user-level copy (deleted SKILL.md) is detected, then healed by a
 # re-run; the project side stays untouched.
@@ -389,6 +414,103 @@ test -f "$TMP/migproj/.harness/skills/rsi-loop/references/stop-conditions.md"
 test -f "$TMP/migproj/.harness/.rsi/policy.yaml"
 test -f "$TMP/migproj/.rsi/policy.yaml"
 printf '%s\n' "$out" | grep -q 'left in place'
+
+# Legacy hook layout: identical copies at root scripts/ move into
+# .harness/scripts/; customized copies stay in place; the project-owned
+# setup-env.sh convention file (G6) is not a managed name and stays untouched.
+mkdir -p "$TMP/migproj/scripts"
+cp "$ROOT/scripts/compact-archive.py" "$TMP/migproj/scripts/compact-archive.py"
+printf '# local hook tweak\n' >> "$TMP/migproj/scripts/session-recall.py"
+printf '#!/usr/bin/env bash\n# project env setup\n' > "$TMP/migproj/scripts/setup-env.sh"
+out="$("$ROOT/install.sh" --target "$TMP/migproj" --mode adopt --no-git 2>&1)"
+test ! -e "$TMP/migproj/scripts/compact-archive.py"
+test -f "$TMP/migproj/.harness/scripts/compact-archive.py"
+test -f "$TMP/migproj/scripts/session-recall.py"
+test -f "$TMP/migproj/scripts/setup-env.sh"
+printf '%s\n' "$out" | grep -q 'legacy   scripts/session-recall.py'
+# --check reports leftover legacy hook copies without failing (simulate a stale
+# state: managed copy missing, root copy present).
+rm "$TMP/migproj/.harness/scripts/compact-recall.pi.ts"
+printf 'x\n' > "$TMP/migproj/scripts/compact-recall.pi.ts"
+if out="$("$ROOT/install.sh" --target "$TMP/migproj" --check 2>&1)"; then
+  printf '%s\n' "$out" | grep -q 'legacy     scripts/compact-recall.pi.ts'
+else
+  echo "install smoke test: FAIL (legacy hook leftover failed a complete check)" >&2
+  exit 1
+fi
+
+# Layout v1 -> v2 migration: a harness-managed project whose record directories
+# still sit at the root gets them moved under .harness/; destination collisions
+# stay at the root and are reported; the layout marker lands at v2.
+V2P="$TMP/v1proj"
+"$ROOT/install.sh" --target "$V2P" --mode auto --no-git >/dev/null
+# Roll the project back to a v1 shape: drop the marker, move record dirs back
+# to the root, and give the project an uncustomized v1 policy.
+rm "$V2P/.harness/layout-version.txt"
+mkdir -p "$V2P/docs"
+mv "$V2P/.harness/docs/engineering" "$V2P/docs/engineering"
+mv "$V2P/.harness/decisions" "$V2P/decisions"
+mv "$V2P/.harness/issues" "$V2P/issues"
+mv "$V2P/.harness/progress" "$V2P/progress"
+mv "$V2P/.harness/conversations" "$V2P/conversations"
+mv "$V2P/.harness/evals" "$V2P/evals"
+cp "$ROOT/.harness/templates/project/.rsi/policy-v1.yaml" "$V2P/.harness/.rsi/policy.yaml"
+# Destination collision: a v2-side decisions/adr.md already exists with
+# different content — the root copy must stay and be reported, not overwritten.
+mkdir -p "$V2P/.harness/decisions"
+printf 'v2 side content\n' > "$V2P/.harness/decisions/adr.md"
+# Project-owned content that must survive the migration untouched.
+printf 'project decision record\n' > "$V2P/decisions/adr.md"
+printf 'my own notes\n' > "$V2P/docs/product.md"
+out="$("$ROOT/install.sh" --target "$V2P" --mode adopt --no-git 2>&1)"
+test -f "$V2P/.harness/layout-version.txt"
+grep -qx '2' "$V2P/.harness/layout-version.txt"
+test -f "$V2P/.harness/docs/engineering/index.md"
+test -f "$V2P/.harness/decisions/index.md"
+test -f "$V2P/.harness/issues/index.md"
+test -f "$V2P/.harness/progress/index.md"
+test -d "$V2P/.harness/conversations/archive"
+test -d "$V2P/.harness/evals/results"
+test -f "$V2P/docs/product.md"
+# The colliding root file survived; everything else moved out of the root.
+test -f "$V2P/decisions/adr.md"
+grep -q '^project decision record$' "$V2P/decisions/adr.md"
+test ! -e "$V2P/decisions/index.md"
+test ! -e "$V2P/docs/engineering"
+test ! -e "$V2P/issues"
+test ! -e "$V2P/progress"
+test ! -e "$V2P/conversations"
+test ! -e "$V2P/evals"
+printf '%s\n' "$out" | grep -q 'layout v1 -> v2'
+printf '%s\n' "$out" | grep -q 'conflict decisions/adr.md'
+printf '%s\n' "$out" | grep -q 'upgrade  .harness/.rsi/policy.yaml'
+# Re-run on an already-v2 project is a no-op migration (idempotent).
+out="$("$ROOT/install.sh" --target "$V2P" --mode adopt --no-git 2>&1)"
+printf '%s\n' "$out" | grep -q 'layout   v2'
+# --check reports a v1 project without failing a complete install.
+rm "$V2P/.harness/layout-version.txt"
+printf 'v1 leftover\n' > "$V2P/decisions/stale.md"
+if out="$("$ROOT/install.sh" --target "$V2P" --check 2>&1)"; then
+  printf '%s\n' "$out" | grep -q 'legacy     layout v1'
+else
+  echo "install smoke test: FAIL (layout v1 leftover failed a complete check)" >&2
+  exit 1
+fi
+
+# A project WITHOUT .harness/ is fresh (version 0) even when it carries its own
+# root-level decisions/ and progress/: nothing moves, and the v2 record
+# directories are created alongside the project's own content.
+PLAIN="$TMP/plainproj"
+mkdir -p "$PLAIN/decisions" "$PLAIN/progress"
+printf 'pre-existing project decision\n' > "$PLAIN/decisions/our-adr.md"
+printf 'project progress note\n' > "$PLAIN/progress/notes.md"
+out="$("$ROOT/install.sh" --target "$PLAIN" --mode adopt --no-git 2>&1)"
+printf '%s\n' "$out" | grep -q 'layout   v2 (fresh install)'
+test -f "$PLAIN/decisions/our-adr.md"
+test -f "$PLAIN/progress/notes.md"
+test -f "$PLAIN/.harness/decisions/index.md"
+test -d "$PLAIN/.harness/evals/results"
+test ! -e "$PLAIN/.harness/decisions/our-adr.md"
 
 # Regression (issues/2026-09-19-remote-install-sed-pipe): build_agents_section
 # must survive a repair hint containing '|' (the remote curl|bash form).

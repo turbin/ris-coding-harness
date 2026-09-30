@@ -32,6 +32,7 @@ import collections
 import glob
 import os
 import sys
+from pathlib import Path
 
 try:
     import yaml
@@ -238,19 +239,30 @@ def report_budget(rounds, rounds_dir):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("verdicts_dir", nargs="?", default="evals/results")
+    ap.add_argument("verdicts_dir", nargs="?", default=None,
+                    help="verdict directory (default: .harness/evals/results when "
+                         "present, else evals/results for pre-v2 layouts)")
     ap.add_argument("--verbose", action="store_true")
-    ap.add_argument("--rounds-dir", default="progress/loop", metavar="DIR",
-                    help="loop round-report dir for budget telemetry "
-                         "(default: progress/loop; pass an empty string to skip)")
+    ap.add_argument("--rounds-dir", default=None, metavar="DIR",
+                    help="loop round-report dir for budget telemetry (default: "
+                         ".harness/progress/loop when present, else progress/loop; "
+                         "pass an empty string to skip)")
     args = ap.parse_args()
+    verdicts_dir = args.verdicts_dir
+    if not verdicts_dir:
+        verdicts_dir = (".harness/evals/results"
+                        if Path(".harness/evals/results").is_dir() else "evals/results")
+    rounds_dir = args.rounds_dir
+    if rounds_dir is None:
+        rounds_dir = (".harness/progress/loop"
+                      if Path(".harness/progress/loop").is_dir() else "progress/loop")
 
-    verdicts = load_verdicts(args.verdicts_dir)
-    round_reports = load_rounds(args.rounds_dir) if args.rounds_dir else None
+    verdicts = load_verdicts(verdicts_dir)
+    round_reports = load_rounds(rounds_dir) if rounds_dir else None
     if not verdicts:
-        print(f"no verdicts found in {args.verdicts_dir}")
+        print(f"no verdicts found in {verdicts_dir}")
         if round_reports:
-            report_budget(round_reports, args.rounds_dir)
+            report_budget(round_reports, rounds_dir)
         return 0
 
     # --- per-task table -------------------------------------------------
@@ -312,7 +324,7 @@ def main():
             print(f"  {cat}: {n} findings")
 
     if round_reports:
-        report_budget(round_reports, args.rounds_dir)
+        report_budget(round_reports, rounds_dir)
     return 0
 
 

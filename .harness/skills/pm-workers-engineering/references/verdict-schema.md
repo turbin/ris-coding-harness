@@ -8,10 +8,10 @@ Every milestone review decision must be recorded as a machine-readable YAML verd
 
 - Write one file per milestone decision to:
 
-  `evals/results/<task-id>-<milestone>.yaml`
+  `.harness/evals/results/<task-id>-<milestone>.yaml`
 
 - One milestone decision = one file. When a milestone is re-reviewed after fixes, overwrite the same file; `rounds` records how many adversarial round-trips it took.
-- Create `evals/results/` if it does not exist. This is the protocol-required telemetry location.
+- Create `.harness/evals/results/` if it does not exist. This is the protocol-required telemetry location.
 - If project rules (`docs/engineering/` or equivalent) specify a different telemetry location, follow the project rules.
 
 ## Schema version

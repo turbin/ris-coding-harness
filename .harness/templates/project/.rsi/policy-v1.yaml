@@ -3,16 +3,11 @@
 schema_version: 2
 
 # Files/globs that autonomous mutation must never modify.
-# The legacy (pre-v2) locations stay protected so that conflicts left at the
-# root by the v1 -> v2 migration are merged by a human, never auto-modified.
 protected_files:
   - ".harness/.rsi/**"
   - ".rsi/**"
-  - ".harness/evals/tasks/**"
-  - ".harness/evals/run-eval.*"
   - "evals/tasks/**"
   - "evals/run-eval.*"
-  - "docs/engineering/**"
   - "docs/rsi-design.md"
   - "install.sh"
   - "install.ps1"
@@ -21,7 +16,6 @@ protected_files:
 # (task_commit below) must exclude these; a human who reviewed the content
 # may bypass with `git commit --no-verify`.
 hard_blocked_files:
-  - ".harness/docs/engineering/platform/**"
   - "docs/engineering/platform/**"
 
 # Per-round mutation budget. Exceeding it requires splitting into multiple rounds.
@@ -35,8 +29,8 @@ gate: l1-auto
 # Self-modification layers (risk ascending). L3 never auto-mutates.
 # L1P overrides L1 for matching paths.
 layers:
-  L1: ".harness/docs/engineering/**"      # project rules (layout v2); default mutation target
-  L1P: ".harness/docs/engineering/platform/**"  # platform knowledge cards; never auto-committed
+  L1: "docs/engineering/**"            # project rules; default mutation target
+  L1P: "docs/engineering/platform/**"  # platform knowledge cards; never auto-committed
   L2: ".harness/skills/**"              # collaboration protocol; needs eval non-regression
   L3: ".harness/.rsi/**"                        # harness mechanism; human approval only
 
@@ -59,13 +53,9 @@ task_commit:
   scope:
     include:
       - "files touched by the task"
-      - ".harness/evals/results/**"      # layout v2 verdict location
-      - ".harness/issues/**"
-      - ".harness/progress/**"
-      - "evals/results/**"               # pre-v2 locations, kept during migration
+      - "evals/results/**"
       - "issues/**"
       - "progress/**"
     exclude:
-      - ".harness/docs/engineering/platform/**"  # L1P; see hard_blocked_files
-      - "docs/engineering/platform/**"           # L1P (pre-v2 location)
+      - "docs/engineering/platform/**"   # L1P; see hard_blocked_files
   push: false
