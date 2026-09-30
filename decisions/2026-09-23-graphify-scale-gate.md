@@ -67,6 +67,9 @@ graphify 自称代码库问题的第一跳，但它的图质量随工程规模�
 - ~~**模型按需补全拓扑形态**~~ 已决策（2026-09-23，形态③：现算 + 落盘缓存）：
   见 `decisions/2026-09-23-topology-synthesis.md`（`architecture-topology` skill，user 级）。
   首次真实使用后的合成质量/成本校准仍开放。
+- **CodeGraph 尚未落地**：off 路由点名 CodeGraph，但本机 CLI 未安装、零索引（安装与否
+  待用户答复）—— 记录于 `issues/2026-09-24-codegraph-absent-vs-routing.md`；
+  启用时须同步给 `.gitignore` 模板补 `.codegraph/`。
 
 ## 影响
 
