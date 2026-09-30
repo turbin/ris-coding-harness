@@ -230,6 +230,7 @@ function Get-SkillDest([string]$Name, [string]$UseScope) {
 }
 
 $RequestedAgents = @()
+$LayoutVersion = 2
 foreach ($item in $Agent) {
   foreach ($name in ($item -split ',')) {
     $n = $name.Trim().ToLowerInvariant()
@@ -497,7 +498,7 @@ outside the markers.
         $graphifyLines = @(
           "- Structure/architecture queries: graphify is **DISABLED** for this project",
           "  ($GraphifyValue files > threshold $GraphifyThreshold) - its topology is unreliable at that scale",
-          '  (decision in `decisions/`); do not use graphify and do not build',
+          '  (decision in `.harness/decisions/`); do not use graphify and do not build',
           '  `graphify-out/`. Use `zg query` (semantic retrieval) + CodeGraph (call graphs',
           '  / blast radius) instead; use `zg` for cross-document semantics.'
         ) -join "`n"
@@ -523,16 +524,16 @@ $($script:BeginMark)
 - `mermaid-diagrams` (vendored, MIT) - Mermaid diagram syntax reference (flow, sequence, class, ERD, state, git graphs, charts) with per-type references, user-level like `c4-architecture` (`~/.kimi-code/skills/mermaid-diagrams/`, `~/.claude/skills/mermaid-diagrams/`, ...), not part of this repository. Invoke directly when a task needs a diagram; architecture documentation (C4) is owned by c4-architecture.
 - `architecture-topology` (homegrown) - on-demand architecture-topology synthesis with a dated disk cache (`docs/architecture/topology.md`: module map, dependency direction, hubs, key paths), user-level like the two skills above. Invoke it for module / hub / dependency-direction / reachability questions on projects where the scale gate disabled graphify; it never replaces CodeGraph for code-level call paths.
 
-**Engineering rules (decision layer, outside `.harness/`)**
+**Engineering rules & records (inside `.harness/`, layout v2)**
 
-- Start with `docs/engineering/index.md`; load only task-relevant rule files.
-- `decisions/`, `issues/`, `progress/` hold project records - use each `index.md` before reading many child files.
-- `evals/results/` receives structured reviewer verdicts.
+- Start with `.harness/docs/engineering/index.md`; load only task-relevant rule files.
+- `.harness/decisions/`, `.harness/issues/`, `.harness/progress/` hold project records - use each `index.md` before reading many child files.
+- `.harness/evals/results/` receives structured reviewer verdicts.
 
 $searchSection
 **Harness mechanism boundary**
 
-- `.harness/` holds everything the installer manages: skills, gate policy, manifest, reports. Do not hand-edit; re-run the installer to repair.
+- `.harness/` holds everything the installer manages: skills, hook scripts, engineering rules, project records, conversations state, evals verdicts, gate policy, manifest, reports. Do not hand-edit; re-run the installer to repair.
 - The installer never restructures project source and never overwrites project files outside the managed section of this file.
 
 **Self-check / self-heal**
@@ -606,6 +607,19 @@ $($script:EndMark)
     }
   }
 
+  function Remove-EmptyDirs([string]$Root) {
+    # Prune directories the move emptied, deepest first. Get-ChildItem does not
+    # return the root itself, so it is added explicitly - otherwise an emptied
+    # source directory (e.g. docs/engineering) would survive the migration.
+    $dirs = @(Get-ChildItem -LiteralPath $Root -Recurse -Directory -ErrorAction SilentlyContinue)
+    $dirs += @(Get-Item -LiteralPath $Root -ErrorAction SilentlyContinue)
+    foreach ($d in ($dirs | Where-Object { $_ } | Sort-Object { $_.FullName.Length } -Descending)) {
+      if (-not ($d.GetFiles() -or $d.GetDirectories())) {
+        Remove-Item -LiteralPath $d.FullName -Force -ErrorAction SilentlyContinue
+      }
+    }
+  }
+
   function Migrate-Legacy {
     $ran = $false
     $legacySkills = Join-Path $TargetRoot ".agents/skills"
@@ -613,8 +627,7 @@ $($script:EndMark)
       Get-ChildItem -LiteralPath $legacySkills -Recurse -File | ForEach-Object {
         Migrate-One $_.FullName $legacySkills (Join-Path $SourceRoot "skills") (Join-Path $TargetRoot ".harness/skills")
       }
-      Get-ChildItem -LiteralPath $legacySkills -Recurse -Directory | Sort-Object { $_.FullName.Length } -Descending |
-        Where-Object { -not ($_.GetFiles() -or $_.GetDirectories()) } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+      Remove-EmptyDirs $legacySkills
       $ran = $true
     }
     $legacyRsi = Join-Path $TargetRoot ".rsi"
@@ -622,11 +635,100 @@ $($script:EndMark)
       Get-ChildItem -LiteralPath $legacyRsi -Recurse -File | ForEach-Object {
         Migrate-One $_.FullName $legacyRsi (Join-Path $SourceRoot "templates/project/.rsi") (Join-Path $TargetRoot ".harness/.rsi")
       }
-      Get-ChildItem -LiteralPath $legacyRsi -Recurse -Directory | Sort-Object { $_.FullName.Length } -Descending |
-        Where-Object { -not ($_.GetFiles() -or $_.GetDirectories()) } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+      Remove-EmptyDirs $legacyRsi
       $ran = $true
     }
+    # Legacy layout: hook script copies at root scripts/ move into
+    # .harness/scripts/ only when byte-identical to the managed source; the
+    # project's own scripts (setup-env.ps1, ...) are not managed names and
+    # stay untouched. Skipped when the target IS the harness repo itself —
+    # then root scripts/ holds the canonical sources.
+    $legacyScripts = Join-Path $TargetRoot "scripts"
+    if ((Test-Path -LiteralPath $legacyScripts) -and ($HookSrcRoot -ne $TargetRoot)) {
+      foreach ($name in $HookScriptNames) {
+        $f = Join-Path $legacyScripts $name
+        if (Test-Path -LiteralPath $f) {
+          Migrate-One $f $legacyScripts (Join-Path $HookSrcRoot "scripts") (Join-Path $TargetRoot ".harness/scripts")
+          $ran = $true
+        }
+      }
+    }
     if ($ran) { Write-Host "migrate  legacy layout: identical files moved into .harness/; customized files left in place (see legacy lines above)" }
+  }
+
+  # --- Layout version detection & v1 -> v2 migration ---------------------------
+  # v2 consolidates every installer-managed directory under .harness/. The
+  # marker file .harness/layout-version.txt is the source of truth; projects
+  # installed before versioning get version 1 when they carry a .harness/
+  # directory. A project WITHOUT .harness/ is fresh (version 0) even when it
+  # happens to have its own root-level decisions/ or evals/ - those are project
+  # content and are never touched by the migration.
+  function Get-LayoutVersion {
+    $marker = Join-Path $TargetRoot ".harness/layout-version.txt"
+    if (Test-Path -LiteralPath $marker) {
+      $v = ((Get-Content -LiteralPath $marker -Raw) -replace '[^0-9]', '')
+      if ($v) { return [int]$v }
+    }
+    if (Test-Path -LiteralPath (Join-Path $TargetRoot ".harness")) { return 1 }
+    return 0
+  }
+
+  # Move a v1 record directory into its v2 location. These directories hold
+  # project data (not byte-comparable managed copies), so everything moves;
+  # when the destination already holds a file of the same name, the root copy
+  # stays and the conflict is reported - data is never overwritten or deleted.
+  function Migrate-RecordDir([string]$SrcRel, [string]$DstRel) {
+    $src = Join-Path $TargetRoot $SrcRel
+    if (-not (Test-Path -LiteralPath $src -PathType Container)) { return }
+    $dst = Join-Path $TargetRoot $DstRel
+    New-Item -ItemType Directory -Force -Path $dst | Out-Null
+    Get-ChildItem -LiteralPath $src -Recurse -File | ForEach-Object {
+      $rel = $_.FullName.Substring($src.Length).TrimStart('\', '/')
+      $target = Join-Path $dst $rel
+      if (Test-Path -LiteralPath $target) {
+        Write-Host ("conflict {0} -> {1} (destination exists; left in place)" -f ($SrcRel + "/" + $rel), ($DstRel + "/" + $rel))
+        return
+      }
+      New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+      Move-Item -LiteralPath $_.FullName -Destination $target -Force
+      $script:InstalledFiles += $target
+      $script:MigratedV2 = $true
+    }
+    # Prune directories the move emptied (deepest first), root included.
+    Remove-EmptyDirs $src
+  }
+
+  function Migrate-V1ToV2 {
+    $script:MigratedV2 = $false
+    # Root docs/ itself is project space - only its engineering/ subdirectory
+    # is installer-managed and moves.
+    Migrate-RecordDir "docs/engineering" ".harness/docs/engineering"
+    foreach ($pair in @(@("decisions", ".harness/decisions"), @("issues", ".harness/issues"),
+                        @("progress", ".harness/progress"), @("conversations", ".harness/conversations"),
+                        @("evals", ".harness/evals"))) {
+      Migrate-RecordDir $pair[0] $pair[1]
+    }
+    # Recall-marker gitignore line follows the moved conversations state.
+    $gi = Join-Path $TargetRoot ".gitignore"
+    if ((Test-Path -LiteralPath $gi) -and
+        (Select-String -LiteralPath $gi -Pattern '^conversations/\.state/$' -Quiet) -and
+        -not (Select-String -LiteralPath $gi -Pattern '^\.harness/conversations/\.state/$' -Quiet)) {
+      Add-Content -LiteralPath $gi "`n# compact-recall per-session recall markers (v2 location)`n.harness/conversations/.state/"
+      Write-Host "update .gitignore (.harness/conversations/.state/)"
+      $script:MigratedV2 = $true
+    }
+    # An uncustomized v1 policy.yaml (byte-identical to the archived v1
+    # template) is upgraded in place; a customized one stays untouched -
+    # layer/path semantics there are the project's own.
+    $policyV1Src = Join-Path $SourceRoot "templates/project/.rsi/policy-v1.yaml"
+    $policyDst = Join-Path $TargetRoot ".harness/.rsi/policy.yaml"
+    if ((Test-Path -LiteralPath $policyV1Src) -and (Test-Path -LiteralPath $policyDst) -and
+        ((Get-FileHash -LiteralPath $policyV1Src).Hash -eq (Get-FileHash -LiteralPath $policyDst).Hash)) {
+      Copy-Item -LiteralPath (Join-Path $SourceRoot "templates/project/.rsi/policy.yaml") -Destination $policyDst -Force
+      Write-Host "upgrade  .harness/.rsi/policy.yaml (v1 -> v2 paths)"
+      $script:MigratedV2 = $true
+    }
+    if ($script:MigratedV2) { Write-Host "migrate  layout v1 -> v2: record directories moved under .harness/ (conflicts, if any, left at root and reported above)" }
   }
 
   function Write-Manifest {
@@ -655,6 +757,7 @@ $($script:EndMark)
     }
     $obj = [pscustomobject]@{
       schema_version = 1
+      layout_version = $LayoutVersion
       generated_at = (Get-Date -Format "yyyy-MM-ddTHH:mm:sszzz")
       harness_repo = $Repo
       harness_ref = $Ref
@@ -778,6 +881,28 @@ $($script:EndMark)
     # Legacy layout leftovers are reported, not failed.
     if (Test-Path (Join-Path $TargetRoot ".agents/skills")) { Write-Host "legacy     .agents/skills (old layout; re-run installer to migrate)" }
     if (Test-Path (Join-Path $TargetRoot ".rsi")) { Write-Host "legacy     .rsi/ (old layout; re-run installer to migrate)" }
+    # Layout version: v1 record directories at the root are reported and the
+    # re-run repair is hinted; fresh projects (version 0) are not v1.
+    if ((Get-LayoutVersion) -eq 1) {
+      Write-Host "legacy     layout v1 (record directories at root; re-run installer to migrate to v2)"
+    }
+    # Hook copies are legacy only when the managed counterpart exists under
+    # .harness/scripts/; a root scripts/setup-env.ps1 is a project-owned
+    # convention file (G6) and must not be reported. When the target IS the
+    # installer repo, root scripts/ holds the canonical sources (self-host).
+    $selfHost = $PSScriptRoot -and ($TargetRoot -eq $PSScriptRoot)
+    if (-not $selfHost) {
+      $managedHookNames = @("compact-archive.sh", "compact-archive.ps1", "compact-archive.py",
+                            "session-recall.sh", "session-recall.ps1", "session-recall.py",
+                            "install-kimi-hooks.sh", "install-kimi-hooks.ps1",
+                            "install-agent-hooks.py", "install-agent-hooks.sh", "install-agent-hooks.ps1",
+                            "compact-recall.pi.ts", "compact-recall.opencode.ts")
+      foreach ($name in $managedHookNames) {
+        if ((Test-Path (Join-Path $TargetRoot "scripts/$name")) -and -not (Test-Path (Join-Path $TargetRoot ".harness/scripts/$name"))) {
+          Write-Host "legacy     scripts/$name (old layout; re-run installer to migrate)"
+        }
+      }
+    }
     if (-not $checkFailed) {
       Write-Host "All required skills present."
       exit 0
@@ -816,17 +941,33 @@ $($script:EndMark)
   }
   Write-Host "graphify $GraphifyDecision ($GraphifyValue files $GraphifyCmp $GraphifyThreshold)"
 
+  # --- Layout version detection & v1 -> v2 migration ----------------------------
+  # v2 (layout-version.txt) consolidates every installer-managed directory under
+  # .harness/. Running before template distribution lets Managed-Copy keep any
+  # customized files the migration just moved.
+  $DetectedLayoutVersion = Get-LayoutVersion
+  if ($DetectedLayoutVersion -eq 1) {
+    Write-Host "layout   v1 -> v2 migration"
+    Migrate-V1ToV2
+  }
+  elseif ($DetectedLayoutVersion -eq 0) {
+    Write-Host "layout   v$LayoutVersion (fresh install)"
+  }
+  else {
+    Write-Host "layout   v$DetectedLayoutVersion"
+  }
+
   # --- Core files ---------------------------------------------------------------
   Merge-Managed (Join-Path $TargetRoot "AGENTS.md") (Build-AgentsSection) $AgentsSkel
   Merge-Managed (Join-Path $TargetRoot "CLAUDE.md") (Build-ClaudeSection) $ClaudeSkel
   Get-ChildItem (Join-Path $SourceRoot "templates/project/docs/engineering") -Filter *.md | ForEach-Object {
-    Managed-Copy $_.FullName (Join-Path $TargetRoot ("docs/engineering/" + $_.Name))
+    Managed-Copy $_.FullName (Join-Path $TargetRoot (".harness/docs/engineering/" + $_.Name))
   }
   $PlatformSrc = Join-Path $SourceRoot "templates/project/docs/engineering/platform"
   if (Test-Path $PlatformSrc) {
     Get-ChildItem $PlatformSrc -Recurse -File | ForEach-Object {
       $rel = $_.FullName.Substring($PlatformSrc.Length).TrimStart('\', '/')
-      Managed-Copy $_.FullName (Join-Path $TargetRoot ("docs/engineering/platform/" + $rel))
+      Managed-Copy $_.FullName (Join-Path $TargetRoot (".harness/docs/engineering/platform/" + $rel))
     }
   }
 
@@ -850,18 +991,37 @@ $($script:EndMark)
 
   # Distribute the Kimi Code compact-recall hook scripts (PostCompact archive +
   # UserPromptSubmit recall). Canonical copies live in the harness repo's own
-  # scripts/ directory; $SourceRoot may have been re-rooted into .harness.
+  # scripts/ directory; installed copies belong under .harness/scripts/ (G1:
+  # no harness mechanism directories outside .harness/).
+  $HookScriptNames = @("compact-archive.sh", "compact-archive.ps1", "compact-archive.py",
+                       "session-recall.sh", "session-recall.ps1", "session-recall.py",
+                       "install-kimi-hooks.sh", "install-kimi-hooks.ps1",
+                       "install-agent-hooks.py", "install-agent-hooks.sh", "install-agent-hooks.ps1",
+                       "compact-recall.pi.ts", "compact-recall.opencode.ts")
   $HookSrcRoot = $SourceRoot
-  if (-not (Test-Path (Join-Path $HookSrcRoot "scripts/compact-archive.sh"))) {
+  if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "scripts/compact-archive.sh"))) {
+    # The installer repo's own scripts/ is the canonical source; never let the
+    # installed .harness/scripts/ copies become their own source.
+    $HookSrcRoot = $PSScriptRoot
+  }
+  elseif (-not (Test-Path (Join-Path $HookSrcRoot "scripts/compact-archive.sh"))) {
     $HookSrcRoot = Split-Path $SourceRoot -Parent
   }
-  foreach ($name in @("compact-archive.sh", "compact-archive.ps1", "compact-archive.py",
-                      "session-recall.sh", "session-recall.ps1", "session-recall.py",
-                      "install-kimi-hooks.sh", "install-kimi-hooks.ps1",
-                      "install-agent-hooks.py", "install-agent-hooks.sh", "install-agent-hooks.ps1",
-                      "compact-recall.pi.ts", "compact-recall.opencode.ts")) {
-    $src = Join-Path $HookSrcRoot "scripts/$name"
-    if (Test-Path $src) { Managed-Copy $src (Join-Path $TargetRoot "scripts/$name") }
+  # Self-hosting the harness repo (target == installer repo): the canonical
+  # scripts already live at root scripts/ (G1 Q4 keeps them there), so no
+  # .harness/scripts/ copies are made and the hook adaptation below runs the
+  # root scripts directly — otherwise the repo would carry two copies that
+  # can silently drift apart (Managed-Copy keep semantics).
+  $HookInstaller = Join-Path $TargetRoot ".harness/scripts/install-agent-hooks.py"
+  $SelfHosted = $PSScriptRoot -and ($TargetRoot -eq $PSScriptRoot)
+  if ($SelfHosted) {
+    $HookInstaller = Join-Path $PSScriptRoot "scripts/install-agent-hooks.py"
+  }
+  else {
+    foreach ($name in $HookScriptNames) {
+      $src = Join-Path $HookSrcRoot "scripts/$name"
+      if (Test-Path $src) { Managed-Copy $src (Join-Path $TargetRoot ".harness/scripts/$name") }
+    }
   }
 
   # Adapt and install compact-recall hooks for every agent selected via -Agent
@@ -892,7 +1052,7 @@ $($script:EndMark)
         continue
       }
       Write-Host "hooks  $a"
-      & $py (Join-Path $TargetRoot "scripts/install-agent-hooks.py") $a --target $TargetRoot --scope $Scope
+      & $py $HookInstaller $a --target $TargetRoot --scope $Scope
       if ($LASTEXITCODE -ne 0) { Write-Host "warn: $a hook adaptation failed (non-fatal)" }
     }
   }
@@ -908,26 +1068,34 @@ Use this file as a lightweight navigation surface. Keep entries concise and poin
 |---|---|---|
 '@
 
+  # Init skeleton: root-level dirs are project workspace (G6 keeps root
+  # scripts/ for the setup-env convention); every harness-managed record
+  # directory lives under .harness/ (layout v2).
   if ($Mode -eq "init") {
-    foreach ($d in @("src", "tests", "docs", "decisions", "issues", "conversations", "output", "progress", "scripts", "tmp")) {
+    foreach ($d in @("src", "tests", "docs", "output", "tmp", "scripts")) {
       New-Item -ItemType Directory -Force -Path (Join-Path $TargetRoot $d) | Out-Null
       if ($d -ne "docs" -or -not (Test-Path (Join-Path $TargetRoot "$d/index.md"))) {
         Write-If-Missing (Join-Path $TargetRoot "$d/index.md") $IndexBody
       }
     }
-    New-Item -ItemType Directory -Force -Path (Join-Path $TargetRoot "evals/results") | Out-Null
-    Write-If-Missing (Join-Path $TargetRoot "evals/index.md") $IndexBody
   }
 
-  # Always provide routing indexes for project-management records when the directory exists.
-  foreach ($d in @("decisions", "issues", "progress")) {
-    if (Test-Path (Join-Path $TargetRoot $d)) {
-      Write-If-Missing (Join-Path $TargetRoot "$d/index.md") $IndexBody
-    }
+  # v2 record directories: installer-managed routing surfaces under .harness/.
+  # Created in every mode - the managed AGENTS section routes verdicts and
+  # records here, so the drop points must exist even for adopted projects.
+  foreach ($d in @("decisions", "issues", "progress", "evals")) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $TargetRoot ".harness/$d") | Out-Null
+    Write-If-Missing (Join-Path $TargetRoot ".harness/$d/index.md") $IndexBody
   }
+  New-Item -ItemType Directory -Force -Path (Join-Path $TargetRoot ".harness/evals/results") | Out-Null
 
   # compact-recall hook state: archived summaries + per-session recall markers.
-  New-Item -ItemType Directory -Force -Path (Join-Path $TargetRoot "conversations/archive"), (Join-Path $TargetRoot "conversations/.state") | Out-Null
+  New-Item -ItemType Directory -Force -Path (Join-Path $TargetRoot ".harness/conversations/archive"), (Join-Path $TargetRoot ".harness/conversations/.state") | Out-Null
+
+  # Layout version marker - written on every run (idempotent), consumed by
+  # Get-LayoutVersion on the next run.
+  [System.IO.File]::WriteAllText((Join-Path $TargetRoot ".harness/layout-version.txt"), "$LayoutVersion`n")
+  $script:InstalledFiles += (Join-Path $TargetRoot ".harness/layout-version.txt")
 
   Write-Manifest
 
@@ -959,8 +1127,8 @@ __pycache__/
 tmp/*
 !tmp/index.md
 
-# compact-recall per-session recall markers (local state)
-conversations/.state/
+# compact-recall per-session recall markers (local state, v2 location)
+.harness/conversations/.state/
 
 # OS / editor noise
 .DS_Store
@@ -1265,9 +1433,9 @@ Thumbs.db
 
   Write-Host ""
   Write-Host "Bootstrap complete."
-  Write-Host "Next: fill docs/engineering/index.md and only the rule files relevant to this project."
+  Write-Host "Next: fill .harness/docs/engineering/index.md and only the rule files relevant to this project."
   Write-Host "Agent entry: AGENTS.md (managed section) + CLAUDE.md"
-  Write-Host "Mechanism: .harness/ (skills, policy, manifest, reports)"
+  Write-Host "Mechanism: .harness/ (skills, hook scripts, policy, manifest, reports)"
   if (-not $NoSkill) {
     Write-Host ""
     Write-Host "Required skills:"

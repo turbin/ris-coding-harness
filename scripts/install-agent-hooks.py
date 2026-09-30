@@ -55,6 +55,16 @@ def fwd(path):
     return str(path).replace("\\", "/")
 
 
+def project_script_rel(root, name):
+    """Hook script path relative to the project root. Prefer the managed
+    .harness/scripts/ copy (G1); fall back to a root scripts/ copy for the
+    self-hosted harness repo (canonical sources live there) and for projects
+    not yet re-installed after the layout change."""
+    if (root / ".harness" / "scripts" / name).is_file():
+        return f".harness/scripts/{name}"
+    return f"scripts/{name}"
+
+
 def managed_command(*needles):
     def is_ours(handler):
         cmd = str(handler.get("command", "")) + str(handler.get("commandWindows", ""))
@@ -226,12 +236,14 @@ def install_claude(root, scope):
             return 1
     hooks = data.setdefault("hooks", {})
     ours = managed_command("compact-archive", "session-recall")
+    archive_rel = project_script_rel(root, "compact-archive.sh")
+    recall_rel = project_script_rel(root, "session-recall.sh")
     archive_group = {
         "matcher": "manual|auto",
         "hooks": [
             {
                 "type": "command",
-                "command": 'bash "$CLAUDE_PROJECT_DIR/scripts/compact-archive.sh" --flavor claude',
+                "command": f'bash "$CLAUDE_PROJECT_DIR/{archive_rel}" --flavor claude',
                 "timeout": 10,
             }
         ],
@@ -240,7 +252,7 @@ def install_claude(root, scope):
         "hooks": [
             {
                 "type": "command",
-                "command": 'bash "$CLAUDE_PROJECT_DIR/scripts/session-recall.sh"',
+                "command": f'bash "$CLAUDE_PROJECT_DIR/{recall_rel}"',
                 "timeout": 10,
             }
         ]
@@ -268,11 +280,11 @@ def install_codex(root, scope):
     hooks = data.setdefault("hooks", {})
     ours = managed_command("compact-archive", "session-recall")
     if IS_WINDOWS:
-        archive_cmd = f'python "{fwd(root)}/scripts/compact-archive.py" --flavor codex'
-        recall_cmd = f'python "{fwd(root)}/scripts/session-recall.py"'
+        archive_cmd = f'python "{fwd(root)}/{project_script_rel(root, "compact-archive.py")}" --flavor codex'
+        recall_cmd = f'python "{fwd(root)}/{project_script_rel(root, "session-recall.py")}"'
     else:
-        archive_cmd = f'bash "{root}/scripts/compact-archive.sh" --flavor codex'
-        recall_cmd = f'bash "{root}/scripts/session-recall.sh"'
+        archive_cmd = f'bash "{root}/{project_script_rel(root, "compact-archive.sh")}" --flavor codex'
+        recall_cmd = f'bash "{root}/{project_script_rel(root, "session-recall.sh")}"'
     archive_group = {
         "matcher": "manual|auto",
         "hooks": [

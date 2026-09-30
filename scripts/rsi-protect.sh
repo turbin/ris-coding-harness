@@ -11,8 +11,8 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 POLICY="$ROOT/.harness/.rsi/policy.yaml"
 [ -f "$POLICY" ] || POLICY="$ROOT/.rsi/policy.yaml"  # legacy layout
 
-FALLBACK_LISTS='P:evals/tasks/** P:evals/run-eval.* P:docs/rsi-design.md P:install.sh P:install.ps1 P:.harness/.rsi/** P:.rsi/**
-H:docs/engineering/platform/**'
+FALLBACK_LISTS='P:evals/tasks/** P:evals/run-eval.* P:.harness/evals/tasks/** P:.harness/evals/run-eval.* P:.harness/docs/engineering/** P:docs/engineering/** P:docs/rsi-design.md P:install.sh P:install.ps1 P:.harness/.rsi/** P:.rsi/**
+H:.harness/docs/engineering/platform/** H:docs/engineering/platform/**'
 
 PYBIN=""
 for c in python3 python py; do
@@ -26,8 +26,8 @@ import sys
 try:
     import yaml
 except ImportError:
-    print("P:evals/tasks/** P:evals/run-eval.* P:docs/rsi-design.md P:install.sh P:install.ps1 P:.harness/.rsi/** P:.rsi/**")
-    print("H:docs/engineering/platform/**")
+    print("P:evals/tasks/** P:evals/run-eval.* P:.harness/evals/tasks/** P:.harness/evals/run-eval.* P:.harness/docs/engineering/** P:docs/engineering/** P:docs/rsi-design.md P:install.sh P:install.ps1 P:.harness/.rsi/** P:.rsi/**")
+    print("H:.harness/docs/engineering/platform/** H:docs/engineering/platform/**")
     sys.exit(0)
 with open(sys.argv[1], encoding="utf-8") as f:
     doc = yaml.safe_load(f) or {}

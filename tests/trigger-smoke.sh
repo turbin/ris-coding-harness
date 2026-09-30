@@ -42,17 +42,25 @@ if "$T" status >/dev/null 2>&1; then
   exit 1
 fi
 
-# 4. a commit touching rule paths sets the marker immediately
+# 4. a commit touching rule paths sets the marker immediately (layout v2 path)
+mkdir -p .harness/docs/engineering
+echo r > .harness/docs/engineering/coding.md
+git add -A && git commit -qm c3
+"$T" commit 5
+"$T" status | grep -q 'rules'
+
+# 4a. the pre-v2 root path still triggers (legacy layout support)
+"$T" reset
 mkdir -p docs/engineering
 echo r > docs/engineering/coding.md
-git add -A && git commit -qm c3
+git add -A && git commit -qm c3a
 "$T" commit 5
 "$T" status | grep -q 'rules'
 
 # 4b. L1P platform cards do NOT set the marker (no eval gate for L1P)
 "$T" reset
-mkdir -p docs/engineering/platform/windows
-echo w > docs/engineering/platform/windows/x.md
+mkdir -p .harness/docs/engineering/platform/windows
+echo w > .harness/docs/engineering/platform/windows/x.md
 git add -A && git commit -qm c3b
 "$T" commit 2
 if "$T" status >/dev/null 2>&1; then
@@ -75,7 +83,7 @@ fi
 bash "$REPO/evals/install-hooks.sh" --target "$REPO" >/dev/null
 test -x "$REPO/.git/hooks/post-commit"
 test -x "$REPO/.git/hooks/post-merge"
-echo y > docs/engineering/testing.md
+echo y > .harness/docs/engineering/testing.md
 git add -A && git commit -qm c4
 "$T" status | grep -q 'rules'
 

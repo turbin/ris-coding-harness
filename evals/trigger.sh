@@ -47,8 +47,8 @@ cmd_commit() {
   rules_hit=""
   while IFS= read -r p; do
     case "$p" in
-      docs/engineering/platform/*) ;;  # L1P has no eval gate
-      docs/engineering/*|.harness/skills/*|.agents/skills/*|.rsi/*|.harness/.rsi/*) rules_hit="$p"; break ;;
+      .harness/docs/engineering/platform/*|docs/engineering/platform/*) ;;  # L1P has no eval gate (v2 / pre-v2)
+      .harness/docs/engineering/*|docs/engineering/*|.harness/skills/*|.agents/skills/*|.rsi/*|.harness/.rsi/*) rules_hit="$p"; break ;;
     esac
   done <<< "$names"
   if [ -n "$rules_hit" ]; then

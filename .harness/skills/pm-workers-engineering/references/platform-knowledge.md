@@ -29,8 +29,8 @@ regular L1 rules.
 One card per file:
 
 ```text
-docs/engineering/platform/<platform>/<slug>.md
-e.g. docs/engineering/platform/windows/crlf-breaks-bash-scripts.md
+.harness/docs/engineering/platform/<platform>/<slug>.md
+e.g. .harness/docs/engineering/platform/windows/crlf-breaks-bash-scripts.md
 ```
 
 Card body:
@@ -52,7 +52,7 @@ export_ready: true           # future knowledge-base sync picks up export_ready 
 - Applies when: <versions/editions/constraints; when NOT to apply>
 ```
 
-`docs/engineering/platform/index.md` lists the cards and routes loading.
+`.harness/docs/engineering/platform/index.md` lists the cards and routes loading.
 
 ## Loading rule
 
@@ -64,7 +64,7 @@ and the task touches its `scope`. Never inject all cards into context.
 - The loop may create or edit cards in the working tree, but MUST NOT
   `git add` or `git commit` them. Pending cards are listed in the round/task
   report as "awaiting human commit".
-- Uncommitted changes under `docs/engineering/platform/` are expected state,
+- Uncommitted changes under `.harness/docs/engineering/platform/` are expected state,
   not workspace pollution (loop preflight and reviewers treat them
   accordingly).
 - Conflict resolution inside L1P follows `rule-conflict-check.md`, but even

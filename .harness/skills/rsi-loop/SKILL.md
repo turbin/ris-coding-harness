@@ -68,7 +68,7 @@ invoke rsi-loop --gate <observe-only|l1-auto|all-manual> --rounds <N>
       `references/round-protocol.md` SPAWN step) — a round without a trace
       is invalid.
    c. Collect the sub-agent's results: structured verdict
-      (`evals/results/<task-id>-<milestone>.yaml`), issues, diff stats,
+      (`.harness/evals/results/<task-id>-<milestone>.yaml`), issues, diff stats,
       trace file, and the session's token/cost usage extracted from the
       trace with `scripts/trace-usage.py` (orchestrator-measured, never
       self-reported; see `references/round-protocol.md` Budget enforcement).

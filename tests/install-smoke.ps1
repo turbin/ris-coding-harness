@@ -50,13 +50,32 @@ try {
   Assert-True ((Get-Content (Join-Path $New "AGENTS.md") -Raw) -match "ris-coding-harness:begin") "AGENTS managed markers"
   Assert-True ((Get-Content (Join-Path $New "CLAUDE.md") -Raw) -match "ris-coding-harness:begin") "CLAUDE managed markers"
   Assert-True (Test-Path (Join-Path $New "src/index.md")) "new/src/index.md"
-  Assert-True (Test-Path (Join-Path $New "docs/engineering/index.md")) "new rules index"
-  Assert-True (Test-Path (Join-Path $New "docs/engineering/platform/index.md")) "new platform index"
+  # Layout v2: every installer-managed record directory lives under .harness/.
+  Assert-True (Test-Path (Join-Path $New ".harness/docs/engineering/index.md")) "new rules index"
+  Assert-True (Test-Path (Join-Path $New ".harness/docs/engineering/platform/index.md")) "new platform index"
+  Assert-True (Test-Path (Join-Path $New ".harness/decisions/index.md")) "new decisions index"
+  Assert-True (Test-Path (Join-Path $New ".harness/issues/index.md")) "new issues index"
+  Assert-True (Test-Path (Join-Path $New ".harness/progress/index.md")) "new progress index"
+  Assert-True (Test-Path (Join-Path $New ".harness/conversations/archive")) "new conversations archive"
+  Assert-True (Test-Path (Join-Path $New ".harness/conversations/.state")) "new conversations state"
+  Assert-True ((Get-Content (Join-Path $New ".harness/layout-version.txt") -Raw).Trim() -eq "2") "layout marker v2"
+  # Root level keeps only project workspace: no installer-managed record dirs.
+  foreach ($rel in @("docs/engineering", "decisions", "issues", "progress", "conversations", "evals")) {
+    Assert-True (-not (Test-Path (Join-Path $New $rel))) "root must not hold $rel (layout v2)"
+  }
   Assert-True (Test-Path (Join-Path $New ".harness/skills/pm-workers-engineering/SKILL.md")) "new skill"
   Assert-True (Test-Path (Join-Path $New ".harness/skills/rsi-loop/SKILL.md")) "new rsi-loop"
   Assert-True (Test-Path (Join-Path $New ".harness/skills/rsi-loop/references/preflight.md")) "new rsi-loop preflight"
   Assert-True (Test-Path (Join-Path $New ".harness/.rsi/policy.yaml")) "new policy"
   Assert-True (Test-Path (Join-Path $New ".harness/manifest.json")) "new manifest"
+  # Hook script copies are harness mechanism (G1): they land under
+  # .harness/scripts/, never in the project-owned root scripts/.
+  Assert-True (Test-Path (Join-Path $New ".harness/scripts/compact-archive.py")) "new .harness/scripts archive"
+  Assert-True (Test-Path (Join-Path $New ".harness/scripts/session-recall.py")) "new .harness/scripts recall"
+  Assert-True (Test-Path (Join-Path $New ".harness/scripts/install-agent-hooks.py")) "new .harness/scripts hook installer"
+  Assert-True (-not (Test-Path (Join-Path $New "scripts/compact-archive.py"))) "root scripts must not hold hook copies"
+  Assert-True (-not (Test-Path (Join-Path $New "scripts/session-recall.py"))) "root scripts must not hold hook copies"
+  Assert-True (-not (Test-Path (Join-Path $New "scripts/install-agent-hooks.py"))) "root scripts must not hold hook copies"
   Assert-True ((Get-Content (Join-Path $New ".harness/manifest.json") -Raw) -match '"sha256"') "manifest hashes"
   # Manifest records the two scopes: project skills, user skills, and where the
   # user-level ones landed (absolute paths outside the target).
@@ -68,7 +87,8 @@ try {
   Assert-True ($manifest -match '"skill_scope":\s*\{[^}]*"c4-architecture":\s*"user"') "manifest skill_scope"
   Assert-True ($manifest -match '"user_agent_destinations"') "manifest user destinations"
   Assert-True ($manifest -match "\.kimi-code") "manifest kimi-code destination"
-  Assert-True (Test-Path (Join-Path $New "evals/results")) "new evals/results"
+  Assert-True ($manifest -match '"layout_version":\s*2') "manifest layout version"
+  Assert-True (Test-Path (Join-Path $New ".harness/evals/results")) "new evals/results"
 
   # Both vendored diagram skills are user-level (.harness/skill-scope.txt): they
   # land in the agent user directories and never inside the project.
@@ -86,7 +106,7 @@ try {
 
   # Existing project should be adopted without canonical source/test directories.
   Assert-True (Test-Path (Join-Path $Existing "AGENTS.md")) "existing/AGENTS.md"
-  Assert-True (Test-Path (Join-Path $Existing "docs/engineering/index.md")) "existing rules index"
+  Assert-True (Test-Path (Join-Path $Existing ".harness/docs/engineering/index.md")) "existing rules index"
   Assert-True (Test-Path (Join-Path $Existing ".harness/skills/pm-workers-engineering/SKILL.md")) "existing skill"
   Assert-True (-not (Test-Path (Join-Path $Existing "src"))) "existing must not get src/"
   Assert-True (-not (Test-Path (Join-Path $Existing "tests"))) "existing must not get tests/"
@@ -104,9 +124,9 @@ try {
   Assert-True ((Get-Content (Join-Path $Existing "AGENTS.md") -Raw) -match "do not touch") "user content still kept"
 
   # Re-running must be non-destructive without -Force.
-  [System.IO.File]::WriteAllText((Join-Path $Existing "docs/engineering/coding.md"), "# local customization`n")
+  [System.IO.File]::WriteAllText((Join-Path $Existing ".harness/docs/engineering/coding.md"), "# local customization`n")
   & (Join-Path $Root "install.ps1") -Target $Existing -Mode adopt -NoGit | Out-Null
-  $coding = Get-Content (Join-Path $Existing "docs/engineering/coding.md") -Raw
+  $coding = Get-Content (Join-Path $Existing ".harness/docs/engineering/coding.md") -Raw
   Assert-True ($coding -match "^# local customization") "local customization preserved"
 
   # -Agent claude,opencode,codex installs the project skills to .harness plus all
@@ -165,7 +185,7 @@ try {
   & (Join-Path $Root "install.ps1") -Target $Existing -Mode adopt -NoGit | Out-Null
   & (Join-Path $Root "install.ps1") -Target $Existing -Check | Out-Null
   Assert-True ($LASTEXITCODE -eq 0) "-Check must pass after repair"
-  $coding = Get-Content (Join-Path $Existing "docs/engineering/coding.md") -Raw
+  $coding = Get-Content (Join-Path $Existing ".harness/docs/engineering/coding.md") -Raw
   Assert-True ($coding -match "^# local customization") "local customization preserved"
 
   # A deleted user-level copy is detected and healed by a re-run.
@@ -395,6 +415,87 @@ exit 0
   Assert-True (Test-Path (Join-Path $Mig ".harness/.rsi/policy.yaml")) "managed policy installed"
   Assert-True (Test-Path (Join-Path $Mig ".rsi/policy.yaml")) "customized legacy policy stays"
   Assert-True (($migOut -join "`n") -match "left in place") "customized leftovers reported"
+
+  # Legacy hook layout: identical copies at root scripts/ move into
+  # .harness/scripts/; customized copies stay in place; the project-owned
+  # setup-env.ps1 convention file (G6) is not a managed name and stays untouched.
+  $LegacyScripts = Join-Path $Mig "scripts"
+  New-Item -ItemType Directory -Force -Path $LegacyScripts | Out-Null
+  Copy-Item (Join-Path $Root "scripts/compact-archive.py") (Join-Path $LegacyScripts "compact-archive.py")
+  [System.IO.File]::WriteAllText((Join-Path $LegacyScripts "session-recall.py"), ((Get-Content (Join-Path $Root "scripts/session-recall.py") -Raw) + "# local hook tweak`n"))
+  [System.IO.File]::WriteAllText((Join-Path $LegacyScripts "setup-env.ps1"), "# project env setup`n")
+  $migOut = & (Join-Path $Root "install.ps1") -Target $Mig -Mode adopt -NoGit 6>&1
+  Assert-True (-not (Test-Path (Join-Path $LegacyScripts "compact-archive.py"))) "identical legacy hook copy must move"
+  Assert-True (Test-Path (Join-Path $Mig ".harness/scripts/compact-archive.py")) "managed hook copy installed"
+  Assert-True (Test-Path (Join-Path $LegacyScripts "session-recall.py")) "customized legacy hook copy stays"
+  Assert-True (Test-Path (Join-Path $LegacyScripts "setup-env.ps1")) "project-owned setup-env.ps1 untouched"
+  Assert-True (($migOut -join "`n") -match "legacy\s+scripts[\\/]session-recall\.py") "customized hook copy reported"
+  # -Check reports leftover legacy hook copies without failing (stale state:
+  # managed copy missing, root copy present).
+  Remove-Item (Join-Path $Mig ".harness/scripts/compact-recall.pi.ts") -Force
+  [System.IO.File]::WriteAllText((Join-Path $LegacyScripts "compact-recall.pi.ts"), "x`n")
+  $checkOut = & (Join-Path $Root "install.ps1") -Target $Mig -Check 6>&1
+  Assert-True ($LASTEXITCODE -eq 0) "legacy hook leftover must not fail a complete check"
+  Assert-True (($checkOut -join "`n") -match "legacy\s+scripts/compact-recall\.pi\.ts") "legacy hook copy reported"
+
+  # Layout v1 -> v2 migration: a harness-managed project whose record
+  # directories still sit at the root gets them moved under .harness/;
+  # destination collisions stay at the root and are reported; the layout
+  # marker lands at v2 and an uncustomized v1 policy is upgraded in place.
+  $V2 = Join-Path $Tmp "v1proj"
+  & (Join-Path $Root "install.ps1") -Target $V2 -Mode auto -NoGit | Out-Null
+  Remove-Item (Join-Path $V2 ".harness/layout-version.txt") -Force
+  New-Item -ItemType Directory -Force -Path (Join-Path $V2 "docs") | Out-Null
+  Move-Item (Join-Path $V2 ".harness/docs/engineering") (Join-Path $V2 "docs/engineering")
+  foreach ($d in @("decisions", "issues", "progress", "conversations", "evals")) {
+    Move-Item (Join-Path $V2 ".harness/$d") (Join-Path $V2 $d)
+  }
+  Copy-Item (Join-Path $Root ".harness/templates/project/.rsi/policy-v1.yaml") (Join-Path $V2 ".harness/.rsi/policy.yaml") -Force
+  New-Item -ItemType Directory -Force -Path (Join-Path $V2 ".harness/decisions") | Out-Null
+  [System.IO.File]::WriteAllText((Join-Path $V2 ".harness/decisions/adr.md"), "v2 side content`n")
+  [System.IO.File]::WriteAllText((Join-Path $V2 "decisions/adr.md"), "project decision record`n")
+  [System.IO.File]::WriteAllText((Join-Path $V2 "docs/product.md"), "my own notes`n")
+  $v2Out = & (Join-Path $Root "install.ps1") -Target $V2 -Mode adopt -NoGit 6>&1
+  Assert-True ((Get-Content (Join-Path $V2 ".harness/layout-version.txt") -Raw).Trim() -eq "2") "v2 marker after migration"
+  Assert-True (Test-Path (Join-Path $V2 ".harness/docs/engineering/index.md")) "rules migrated"
+  Assert-True (Test-Path (Join-Path $V2 ".harness/decisions/index.md")) "decisions migrated"
+  Assert-True (Test-Path (Join-Path $V2 ".harness/issues/index.md")) "issues migrated"
+  Assert-True (Test-Path (Join-Path $V2 ".harness/progress/index.md")) "progress migrated"
+  Assert-True (Test-Path (Join-Path $V2 ".harness/conversations/archive")) "conversations migrated"
+  Assert-True (Test-Path (Join-Path $V2 ".harness/evals/results")) "evals migrated"
+  Assert-True (Test-Path (Join-Path $V2 "docs/product.md")) "project-owned docs content untouched"
+  Assert-True (Test-Path (Join-Path $V2 "decisions/adr.md")) "colliding root file survives"
+  Assert-True (-not (Test-Path (Join-Path $V2 "docs/engineering"))) "legacy rules dir pruned"
+  foreach ($d in @("issues", "progress", "conversations", "evals")) {
+    Assert-True (-not (Test-Path (Join-Path $V2 $d))) "legacy $d pruned after migration"
+  }
+  Assert-True (($v2Out -join "`n") -match "layout v1 -> v2") "migration reported"
+  Assert-True (($v2Out -join "`n") -match "conflict decisions/adr\.md") "collision reported"
+  Assert-True (($v2Out -join "`n") -match "upgrade\s+\.harness/\.rsi/policy\.yaml") "v1 policy upgraded"
+  # Re-running on an already-v2 project is a no-op migration (idempotent).
+  $v2Again = & (Join-Path $Root "install.ps1") -Target $V2 -Mode adopt -NoGit 6>&1
+  Assert-True (($v2Again -join "`n") -match "layout   v2") "idempotent on v2"
+  # -Check reports a v1 project without failing a complete install.
+  Remove-Item (Join-Path $V2 ".harness/layout-version.txt") -Force
+  [System.IO.File]::WriteAllText((Join-Path $V2 "decisions/stale.md"), "v1 leftover`n")
+  $v1Check = & (Join-Path $Root "install.ps1") -Target $V2 -Check 6>&1
+  Assert-True ($LASTEXITCODE -eq 0) "layout v1 leftover must not fail a complete check"
+  Assert-True (($v1Check -join "`n") -match "legacy\s+layout v1") "layout v1 reported by -Check"
+
+  # A project WITHOUT .harness/ is fresh (version 0) even when it carries its
+  # own root-level decisions/ and progress/: nothing moves, and the v2 record
+  # directories are created alongside the project's own content.
+  $Plain = Join-Path $Tmp "plainproj"
+  New-Item -ItemType Directory -Force -Path (Join-Path $Plain "decisions"), (Join-Path $Plain "progress") | Out-Null
+  [System.IO.File]::WriteAllText((Join-Path $Plain "decisions/our-adr.md"), "pre-existing project decision`n")
+  [System.IO.File]::WriteAllText((Join-Path $Plain "progress/notes.md"), "project progress note`n")
+  $plainOut = & (Join-Path $Root "install.ps1") -Target $Plain -Mode adopt -NoGit 6>&1
+  Assert-True (($plainOut -join "`n") -match "layout\s+v2 \(fresh install\)") "fresh project detected as v2"
+  Assert-True (Test-Path (Join-Path $Plain "decisions/our-adr.md")) "project-owned decisions untouched"
+  Assert-True (Test-Path (Join-Path $Plain "progress/notes.md")) "project-owned progress untouched"
+  Assert-True (Test-Path (Join-Path $Plain ".harness/decisions/index.md")) "v2 record dir created"
+  Assert-True (Test-Path (Join-Path $Plain ".harness/evals/results")) "v2 verdict dir created"
+  Assert-True (-not (Test-Path (Join-Path $Plain ".harness/decisions/our-adr.md"))) "project content not pulled into .harness"
 
   # Anti-nesting guard: bare relative -Target from an empty cwd is refused.
   $Nest = Join-Path $Tmp "nestcwd"

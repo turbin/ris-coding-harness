@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """PostCompact hook for coding agents: archive the compaction summary of the
-current session into <cwd>/conversations/ and maintain conversations/index.md.
+current session into <cwd>/.harness/conversations/ (layout v2; pre-v2 projects
+fall back to <cwd>/conversations/) and maintain the index there.
 
 Supported agent flavors (auto-detected from the hook payload):
   kimi    payload session_id -> summary extracted from the session wire.jsonl
@@ -381,7 +382,16 @@ def main():
     if not time_iso:
         time_iso = now_iso()
 
-    conv = cwd / "conversations"
+    # Layout v2 keeps conversations state under .harness/; fall back to the
+    # root conversations/ of pre-v2 projects. The index.md location wins so
+    # archive and recall keep using the same index during the transition
+    # window (managed dir created, archive not yet migrated).
+    conv = cwd / ".harness" / "conversations"
+    legacy = cwd / "conversations"
+    if (conv / "index.md").is_file():
+        pass
+    elif legacy.is_dir():
+        conv = legacy
     session_dir = conv / "archive" / (session_id or "unknown")
     try:
         session_dir.mkdir(parents=True, exist_ok=True)
@@ -411,6 +421,10 @@ def main():
         return fail_open(f"cannot write {archive_path}: {exc}")
 
     rel = archive_path.relative_to(conv).as_posix()
+    try:
+        conv_rel = conv.relative_to(cwd).as_posix()
+    except ValueError:
+        conv_rel = "conversations"
     changed = update_index(conv / "index.md", time_iso, rel, make_gist(summary))
     try:
         state_dir = conv / ".state"
@@ -419,13 +433,13 @@ def main():
             "archived_at": now_iso(),
             "compact_time": time_iso,
             "session": session_id or "unknown",
-            "file": f"conversations/{rel}",
+            "file": f"{conv_rel}/{rel}",
         }
         with (state_dir / "archive-log.jsonl").open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(receipt, ensure_ascii=False) + "\n")
     except OSError as exc:
         log(f"cannot append archive receipt: {exc}")
-    log(f"archived -> conversations/{rel} (index {'updated' if changed else 'unchanged'})")
+    log(f"archived -> {conv_rel}/{rel} (index {'updated' if changed else 'unchanged'})")
     return 0
 
 

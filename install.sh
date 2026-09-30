@@ -20,6 +20,17 @@ INSTALLED_FILES=""
 BEGIN_MARK='<!-- ris-coding-harness:begin -->'
 END_MARK='<!-- ris-coding-harness:end -->'
 
+# Hook script copies managed by the installer. Canonical sources live in the
+# harness repo's scripts/; installed copies belong under .harness/scripts/.
+HOOK_SCRIPT_NAMES="compact-archive.sh compact-archive.ps1 compact-archive.py session-recall.sh session-recall.ps1 session-recall.py install-kimi-hooks.sh install-kimi-hooks.ps1 install-agent-hooks.py install-agent-hooks.sh install-agent-hooks.ps1 compact-recall.pi.ts compact-recall.opencode.ts"
+
+# Layout versioning (v2, 2026-09-30): every directory the installer generates
+# lives under .harness/ — skills, hook scripts, engineering rules, project
+# records (decisions/issues/progress), conversations state, evals verdicts.
+# v1 kept those record directories at the project root. The installer detects
+# the target's layout version and migrates v1 -> v2 in place.
+LAYOUT_VERSION=2
+
 usage() {
   cat <<'USAGE'
 Project engineering bootstrap installer
@@ -500,7 +511,7 @@ ROUTING
 ROUTING
       printf -- '  (%s files > threshold %s) — its topology is unreliable at that scale\n' "$g_val" "$g_thr" >> "$srch_tmp"
       cat >> "$srch_tmp" <<'ROUTING'
-  (decision in `decisions/`); do not use graphify and do not build
+  (decision in `.harness/decisions/`); do not use graphify and do not build
   `graphify-out/`. Use `zg query` (semantic retrieval) + CodeGraph (call graphs
   / blast radius) instead; use `zg` for cross-document semantics.
 ROUTING
@@ -525,17 +536,17 @@ ROUTING
 - `mermaid-diagrams` (vendored, MIT) — Mermaid diagram syntax reference (flow, sequence, class, ERD, state, git graphs, charts) with per-type references, user-level like `c4-architecture` (`~/.kimi-code/skills/mermaid-diagrams/`, `~/.claude/skills/mermaid-diagrams/`, …), not part of this repository. Invoke directly when a task needs a diagram; architecture documentation (C4) is owned by c4-architecture.
 - `architecture-topology` (homegrown) — on-demand architecture-topology synthesis with a dated disk cache (`docs/architecture/topology.md`: module map, dependency direction, hubs, key paths), user-level like the two skills above. Invoke it for module / hub / dependency-direction / reachability questions on projects where the scale gate disabled graphify; it never replaces CodeGraph for code-level call paths.
 
-**Engineering rules (decision layer, outside `.harness/`)**
+**Engineering rules & records (inside `.harness/`, layout v2)**
 
-- Start with `docs/engineering/index.md`; load only task-relevant rule files.
-- `decisions/`, `issues/`, `progress/` hold project records — use each `index.md` before reading many child files.
-- `evals/results/` receives structured reviewer verdicts.
+- Start with `.harness/docs/engineering/index.md`; load only task-relevant rule files.
+- `.harness/decisions/`, `.harness/issues/`, `.harness/progress/` hold project records — use each `index.md` before reading many child files.
+- `.harness/evals/results/` receives structured reviewer verdicts.
 
 @SEARCH@
 
 **Harness mechanism boundary**
 
-- `.harness/` holds everything the installer manages: skills, gate policy, manifest, reports. Do not hand-edit; re-run the installer to repair.
+- `.harness/` holds everything the installer manages: skills, hook scripts, engineering rules, project records, conversations state, evals verdicts, gate policy, manifest, reports. Do not hand-edit; re-run the installer to repair.
 - The installer never restructures project source and never overwrites project files outside the managed section of this file.
 
 **Self-check / self-heal**
@@ -651,7 +662,96 @@ migrate_legacy() {
     find "$TARGET/.rsi" -depth -type d -empty -delete 2>/dev/null || true
     migrated=1
   fi
+  # Legacy layout: hook script copies at root scripts/ move into
+  # .harness/scripts/ only when byte-identical to the managed source; the
+  # project's own scripts (setup-env.sh, ...) are not managed names and stay
+  # untouched. Skipped when the target IS the harness repo itself — then root
+  # scripts/ holds the canonical sources.
+  if [ -d "$TARGET/scripts" ] && [ "$HOOK_SRC_ROOT" != "$TARGET" ]; then
+    for name in $HOOK_SCRIPT_NAMES; do
+      f="$TARGET/scripts/$name"
+      [ -f "$f" ] || continue
+      migrate_one "$f" "$TARGET/scripts" "$HOOK_SRC_ROOT/scripts" "$TARGET/.harness/scripts"
+      migrated=1
+    done
+  fi
   [ "$migrated" -eq 0 ] || echo "migrate  legacy layout: identical files moved into .harness/; customized files left in place (see legacy lines above)"
+}
+
+# --- Layout version detection & v1 -> v2 migration ---------------------------
+# v2 consolidates every installer-managed directory under .harness/. The
+# marker file .harness/layout-version.txt is the source of truth; projects
+# installed before versioning get version 1 when they carry a .harness/
+# directory. A project WITHOUT .harness/ is fresh (version 0) even when it
+# happens to have its own root-level decisions/ or evals/ — those are project
+# content and are never touched by the migration.
+detect_layout_version() {
+  if [ -f "$TARGET/.harness/layout-version.txt" ]; then
+    v="$(head -n 1 "$TARGET/.harness/layout-version.txt" | tr -cd '0-9')"
+    if [ -n "$v" ]; then printf '%s\n' "$v"; return; fi
+  fi
+  if [ -e "$TARGET/.harness" ]; then
+    printf '1\n'
+  else
+    printf '0\n'
+  fi
+}
+
+# Move a v1 record directory into its v2 location. These directories hold
+# project data (not byte-comparable managed copies), so everything moves;
+# when the destination already holds a file of the same name, the root copy
+# stays and the conflict is reported — data is never overwritten or deleted.
+migrate_record_dir() {
+  src="$1"; dst="$2"
+  [ -d "$TARGET/$src" ] || return 0
+  list_tmp="$(mktemp)"
+  find "$TARGET/$src" -type f -print0 > "$list_tmp" 2>/dev/null || true
+  while IFS= read -r -d '' f; do
+    rel="${f#$TARGET/$src/}"
+    if [ -e "$TARGET/$dst/$rel" ]; then
+      printf 'conflict %s -> %s (destination exists; left in place)\n' "$src/$rel" "$dst/$rel"
+      continue
+    fi
+    mkdir -p "$(dirname "$TARGET/$dst/$rel")"
+    mv "$f" "$TARGET/$dst/$rel"
+    INSTALLED_FILES="$INSTALLED_FILES
+$TARGET/$dst/$rel"
+    MIGRATED_V2=1
+  done < "$list_tmp"
+  rm -f "$list_tmp"
+  # Prune directories the move emptied (deepest first); non-empty dirs stay.
+  find "$TARGET/$src" -depth -type d -empty -delete 2>/dev/null || true
+}
+
+migrate_v1_to_v2() {
+  MIGRATED_V2=0
+  # Root docs/ itself is project space — only its engineering/ subdirectory
+  # is installer-managed and moves.
+  migrate_record_dir "docs/engineering" ".harness/docs/engineering"
+  for pair in "decisions:.harness/decisions" "issues:.harness/issues" \
+              "progress:.harness/progress" "conversations:.harness/conversations" \
+              "evals:.harness/evals"; do
+    migrate_record_dir "${pair%%:*}" "${pair#*:}"
+  done
+  # Recall-marker gitignore line follows the moved conversations state.
+  if [ -f "$TARGET/.gitignore" ] \
+     && grep -q '^conversations/\.state/$' "$TARGET/.gitignore" 2>/dev/null \
+     && ! grep -q '^\.harness/conversations/\.state/$' "$TARGET/.gitignore"; then
+    printf '\n# compact-recall per-session recall markers (v2 location)\n.harness/conversations/.state/\n' >> "$TARGET/.gitignore"
+    printf 'update .gitignore (.harness/conversations/.state/)\n'
+    MIGRATED_V2=1
+  fi
+  # An uncustomized v1 policy.yaml (byte-identical to the archived v1
+  # template) is upgraded in place; a customized one stays untouched —
+  # layer/path semantics there are the project's own.
+  policy_v1_src="$SOURCE_ROOT/templates/project/.rsi/policy-v1.yaml"
+  policy_dst="$TARGET/.harness/.rsi/policy.yaml"
+  if [ -f "$policy_v1_src" ] && [ -f "$policy_dst" ] && cmp -s "$policy_v1_src" "$policy_dst"; then
+    cp "$SOURCE_ROOT/templates/project/.rsi/policy.yaml" "$policy_dst"
+    printf 'upgrade  .harness/.rsi/policy.yaml (v1 -> v2 paths)\n'
+    MIGRATED_V2=1
+  fi
+  [ "$MIGRATED_V2" -eq 0 ] || echo "migrate  layout v1 -> v2: record directories moved under .harness/ (conflicts, if any, left at root and reported above)"
 }
 
 hash_file() {
@@ -715,6 +815,7 @@ EOF_FILES
   {
     printf '{\n'
     printf '  \"schema_version\": 1,\n'
+    printf '  \"layout_version\": %s,\n' "$LAYOUT_VERSION"
     printf '  \"generated_at\": \"%s\",\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')"
     printf '  \"harness_repo\": \"%s\",\n' "$REPO"
     printf '  \"harness_ref\": \"%s\",\n' "$REF"
@@ -766,6 +867,23 @@ if [ "$CHECK" -eq 1 ]; then
   # Legacy layout leftovers are reported, not failed.
   [ -e "$TARGET/.agents/skills" ] && printf 'legacy     .agents/skills (old layout; re-run installer to migrate)\n'
   [ -e "$TARGET/.rsi" ] && printf 'legacy     .rsi/ (old layout; re-run installer to migrate)\n'
+  # Layout version: v1 record directories at the root are reported and the
+  # re-run repair is hinted; fresh projects (version 0) are not v1.
+  det_v="$(detect_layout_version)"
+  if [ "$det_v" = "1" ]; then
+    printf 'legacy     layout v1 (record directories at root; re-run installer to migrate to v2)\n'
+  fi
+  # Hook copies are legacy only when the managed counterpart exists under
+  # .harness/scripts/; a root scripts/setup-env.sh is a project-owned
+  # convention file (G6) and must not be reported. When the target IS the
+  # installer repo, root scripts/ holds the canonical sources (self-host).
+  if [ -z "$SCRIPT_DIR" ] || [ "$TARGET" != "$SCRIPT_DIR" ]; then
+    for name in $HOOK_SCRIPT_NAMES; do
+      if [ -e "$TARGET/scripts/$name" ] && [ ! -e "$TARGET/.harness/scripts/$name" ]; then
+        printf 'legacy     scripts/%s (old layout; re-run installer to migrate)\n' "$name"
+      fi
+    done
+  fi
   if [ "$check_rc" -eq 0 ]; then
     echo "All required skills present."
     exit 0
@@ -802,6 +920,21 @@ else
 fi
 echo "graphify $GRAPHIFY_DECISION ($GRAPHIFY_VALUE files $GRAPHIFY_CMP $GRAPHIFY_THRESHOLD)"
 
+# --- Layout version detection & v1 -> v2 migration ----------------------------
+# v2 (layout-version.txt) consolidates every installer-managed directory under
+# .harness/. Running before template distribution lets managed_copy keep any
+# customized files the migration just moved; running before the graphify count
+# keeps the scale measurement on the post-migration layout.
+DETECTED_LAYOUT_VERSION="$(detect_layout_version)"
+if [ "$DETECTED_LAYOUT_VERSION" = "1" ]; then
+  echo "layout   v1 -> v2 migration"
+  migrate_v1_to_v2
+elif [ "$DETECTED_LAYOUT_VERSION" = "0" ]; then
+  echo "layout   v$LAYOUT_VERSION (fresh install)"
+else
+  echo "layout   v$DETECTED_LAYOUT_VERSION"
+fi
+
 SECTION_TMP="$(mktemp)"
 build_agents_section > "$SECTION_TMP"
 merge_managed "$TARGET/AGENTS.md" "$SECTION_TMP" "$AGENTS_SKEL"
@@ -809,13 +942,13 @@ build_claude_section > "$SECTION_TMP"
 merge_managed "$TARGET/CLAUDE.md" "$SECTION_TMP" "$CLAUDE_SKEL"
 rm -f "$SECTION_TMP"
 for f in "$SOURCE_ROOT"/templates/project/docs/engineering/*.md; do
-  managed_copy "$f" "$TARGET/docs/engineering/$(basename "$f")"
+  managed_copy "$f" "$TARGET/.harness/docs/engineering/$(basename "$f")"
 done
 PLATFORM_SRC="$SOURCE_ROOT/templates/project/docs/engineering/platform"
 if [ -d "$PLATFORM_SRC" ]; then
   while IFS= read -r -d '' f; do
     rel="${f#$PLATFORM_SRC/}"
-    managed_copy "$f" "$TARGET/docs/engineering/platform/$rel"
+    managed_copy "$f" "$TARGET/.harness/docs/engineering/platform/$rel"
   done < <(find "$PLATFORM_SRC" -type f -print0)
 fi
 
@@ -859,20 +992,31 @@ fi
 
 # Distribute the Kimi Code compact-recall hook scripts (PostCompact archive +
 # UserPromptSubmit recall). Canonical copies live in the harness repo's own
-# scripts/ directory; SOURCE_ROOT may have been re-rooted into .harness.
+# scripts/ directory; installed copies belong under .harness/scripts/ (G1:
+# no harness mechanism directories outside .harness/).
 HOOK_SRC_ROOT="$SOURCE_ROOT"
-if [ ! -f "$HOOK_SRC_ROOT/scripts/compact-archive.sh" ]; then
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/scripts/compact-archive.sh" ]; then
+  # The installer repo's own scripts/ is the canonical source; never let the
+  # installed .harness/scripts/ copies become their own source.
+  HOOK_SRC_ROOT="$SCRIPT_DIR"
+elif [ ! -f "$HOOK_SRC_ROOT/scripts/compact-archive.sh" ]; then
   HOOK_SRC_ROOT="$(cd "$(dirname "$SOURCE_ROOT")" && pwd)"
 fi
-for name in compact-archive.sh compact-archive.ps1 compact-archive.py \
-            session-recall.sh session-recall.ps1 session-recall.py \
-            install-kimi-hooks.sh install-kimi-hooks.ps1 \
-            install-agent-hooks.py install-agent-hooks.sh install-agent-hooks.ps1 \
-            compact-recall.pi.ts compact-recall.opencode.ts; do
-  if [ -f "$HOOK_SRC_ROOT/scripts/$name" ]; then
-    managed_copy "$HOOK_SRC_ROOT/scripts/$name" "$TARGET/scripts/$name"
-  fi
-done
+# Self-hosting the harness repo (TARGET == installer repo): the canonical
+# scripts already live at root scripts/ (G1 Q4 keeps them there), so no
+# .harness/scripts/ copies are made and the hook adaptation below runs the
+# root scripts directly — otherwise the repo would carry two copies that can
+# silently drift apart (managed_copy keep semantics).
+HOOK_INSTALLER="$TARGET/.harness/scripts/install-agent-hooks.py"
+if [ -n "$SCRIPT_DIR" ] && [ "$TARGET" = "$SCRIPT_DIR" ]; then
+  HOOK_INSTALLER="$SCRIPT_DIR/scripts/install-agent-hooks.py"
+else
+  for name in $HOOK_SCRIPT_NAMES; do
+    if [ -f "$HOOK_SRC_ROOT/scripts/$name" ]; then
+      managed_copy "$HOOK_SRC_ROOT/scripts/$name" "$TARGET/.harness/scripts/$name"
+    fi
+  done
+fi
 
 # Adapt and install compact-recall hooks for every agent selected via
 # --agent (best effort: a failure warns but never fails the install).
@@ -904,7 +1048,7 @@ if [ -n "$AGENTS_LIST" ]; then
       continue
     fi
     echo "hooks  $a"
-    "$py" "$TARGET/scripts/install-agent-hooks.py" "$a" --target "$TARGET" --scope "$SCOPE" \
+    "$py" "$HOOK_INSTALLER" "$a" --target "$TARGET" --scope "$SCOPE" \
       || echo "warn: $a hook adaptation failed (non-fatal)"
   done
 fi
@@ -918,26 +1062,35 @@ Use this file as a lightweight navigation surface. Keep entries concise and poin
 | Time | File | Summary |
 |---|---|---|'
 
+# Init skeleton: root-level dirs are project workspace (G6 keeps root
+# scripts/ for the setup-env convention); every harness-managed record
+# directory lives under .harness/ (layout v2).
 if [ "$MODE" = "init" ]; then
-  for d in src tests docs decisions issues conversations output progress scripts tmp; do
+  for d in src tests docs output tmp scripts; do
     mkdir -p "$TARGET/$d"
     if [ "$d" != "docs" ] || [ ! -f "$TARGET/$d/index.md" ]; then
       write_if_missing "$TARGET/$d/index.md" "$INDEX_BODY"
     fi
   done
-  mkdir -p "$TARGET/evals/results"
-  write_if_missing "$TARGET/evals/index.md" "$INDEX_BODY"
 fi
 
-# Always provide routing indexes for project-management records when the directory exists.
-for d in decisions issues progress; do
-  if [ -d "$TARGET/$d" ]; then
-    write_if_missing "$TARGET/$d/index.md" "$INDEX_BODY"
-  fi
+# v2 record directories: installer-managed routing surfaces under .harness/.
+# Created in every mode — the managed AGENTS section routes verdicts and
+# records here, so the drop points must exist even for adopted projects.
+for d in decisions issues progress evals; do
+  mkdir -p "$TARGET/.harness/$d"
+  write_if_missing "$TARGET/.harness/$d/index.md" "$INDEX_BODY"
 done
+mkdir -p "$TARGET/.harness/evals/results"
 
 # compact-recall hook state: archived summaries + per-session recall markers.
-mkdir -p "$TARGET/conversations/archive" "$TARGET/conversations/.state"
+mkdir -p "$TARGET/.harness/conversations/archive" "$TARGET/.harness/conversations/.state"
+
+# Layout version marker — written on every run (idempotent), consumed by
+# detect_layout_version on the next run.
+printf '%s\n' "$LAYOUT_VERSION" > "$TARGET/.harness/layout-version.txt"
+INSTALLED_FILES="$INSTALLED_FILES
+$TARGET/.harness/layout-version.txt"
 
 write_manifest
 
@@ -969,8 +1122,8 @@ __pycache__/
 tmp/*
 !tmp/index.md
 
-# compact-recall per-session recall markers (local state)
-conversations/.state/
+# compact-recall per-session recall markers (local state, v2 location)
+.harness/conversations/.state/
 
 # OS / editor noise
 .DS_Store
@@ -1195,9 +1348,9 @@ fi
 
 echo
 echo "Bootstrap complete."
-echo "Next: fill docs/engineering/index.md and only the rule files relevant to this project."
+echo "Next: fill .harness/docs/engineering/index.md and only the rule files relevant to this project."
 echo "Agent entry: AGENTS.md (managed section) + CLAUDE.md"
-echo "Mechanism: .harness/ (skills, policy, manifest, reports)"
+echo "Mechanism: .harness/ (skills, hook scripts, policy, manifest, reports)"
 if [ "$INSTALL_SKILL" -eq 1 ]; then
   echo
   echo "Required skills:"

@@ -32,7 +32,7 @@ itself (context isolation; identical guarantees to a shell-per-round model).
                stop-condition #2 like any missing-verdict round. Never retry
                more than once — infra retries must not become an unbounded loop.
 3. COLLECT   from the sub-agent's report:
-             - structured verdict (evals/results/<task-id>-<milestone>.yaml)
+             - structured verdict (.harness/evals/results/<task-id>-<milestone>.yaml)
              - issues recorded (issues/ or project tracker)
              - diff stats (changed files, added/removed lines, deps)
              - RED evidence status (verdict field)
@@ -87,7 +87,7 @@ itself (context isolation; identical guarantees to a shell-per-round model).
 The sub-agent must return (per `pm-workers-engineering`):
 
 - `MILESTONE ACCEPTED` / `MILESTONE REJECTED` decision;
-- structured verdict written to `evals/results/<task-id>-<milestone>.yaml`
+- structured verdict written to `.harness/evals/results/<task-id>-<milestone>.yaml`
   (schema v1, see `skills/pm-workers-engineering/references/verdict-schema.md`)
   with `origin: protocol` (P5, retro-2026-08-29) — required for every
   sub-agent round so protocol telemetry never mixes with manual bookkeeping;
@@ -127,7 +127,7 @@ round: 3
 task_id: "2026-08-29-eval-01"
 gate: l1-auto
 decision: accepted
-verdict_file: "evals/results/2026-08-29-eval-01-m1.yaml"
+verdict_file: ".harness/evals/results/2026-08-29-eval-01-m1.yaml"
 scores: {correctness: 5, test_quality: 4, simplicity: 5, resource_safety: 5, convention_fit: 4}
 issues: []
 rounds: 1

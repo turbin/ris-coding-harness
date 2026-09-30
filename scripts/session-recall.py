@@ -29,16 +29,30 @@ for _s in (sys.stdin, sys.stdout, sys.stderr):
         pass
 
 BRIEFING_HEAD = (
-    "[对话归档简报] 本工程 conversations/ 下保存了各会话压缩时的上下文摘要档案"
-    "（conversations/index.md 按时间倒序索引；时间越新的条目可信度越高，"
+    "[对话归档简报] 本工程 {conv}/ 下保存了各会话压缩时的上下文摘要档案"
+    "（{conv}/index.md 按时间倒序索引；时间越新的条目可信度越高，"
     "旧摘要引用前需与仓库当前状态核对）。"
 )
 BRIEFING_TAIL = (
-    "当用户要求回顾 / 继续之前的工作时：先读 conversations/index.md 选定相关条目"
+    "当用户要求回顾 / 继续之前的工作时：先读 {conv}/index.md 选定相关条目"
     "（可按 session id 关联），再读对应归档文件获取完整摘要；回答时注明摘要的"
     "时间与 session id。"
 )
 MAX_ROWS = 10
+
+
+def resolve_conv(cwd):
+    """Layout v2 keeps conversations state under .harness/; fall back to the
+    root conversations/ of pre-v2 projects. The index.md location wins so the
+    transition window (managed dir created, archive not yet migrated) still
+    recalls from the old location. Returns (conv_dir, display_rel)."""
+    managed = cwd / ".harness" / "conversations"
+    legacy = cwd / "conversations"
+    if (managed / "index.md").is_file():
+        return managed, ".harness/conversations"
+    if legacy.is_dir():
+        return legacy, "conversations"
+    return managed, ".harness/conversations"
 
 
 def log(msg):
@@ -113,15 +127,17 @@ def parse_rows(index_path):
     return rows
 
 
-def build_briefing(rows):
-    lines = [BRIEFING_HEAD, "", "| Time | File | Summary |", "|---|---|---|"]
+def build_briefing(rows, conv_rel):
+    head = BRIEFING_HEAD.format(conv=conv_rel)
+    tail = BRIEFING_TAIL.format(conv=conv_rel)
+    lines = [head, "", "| Time | File | Summary |", "|---|---|---|"]
     for r in rows[:MAX_ROWS]:
         lines.append(f"| {r[0]} | {r[1]} | {r[2]} |")
     if len(rows) > MAX_ROWS:
         lines.append("")
-        lines.append(f"（共 {len(rows)} 条，其余见 conversations/index.md）")
+        lines.append(f"（共 {len(rows)} 条，其余见 {conv_rel}/index.md）")
     lines.append("")
-    lines.append(BRIEFING_TAIL)
+    lines.append(tail)
     return "\n".join(lines)
 
 
@@ -142,7 +158,7 @@ def main():
         log("skip: cannot resolve project dir (no payload cwd, no session_index workDir)")
         return 0
 
-    conv = cwd / "conversations"
+    conv, conv_rel = resolve_conv(cwd)
     index_path = conv / "index.md"
     if not index_path.is_file():
         return 0
@@ -164,7 +180,7 @@ def main():
     if not rows:
         return 0
 
-    briefing = build_briefing(rows)
+    briefing = build_briefing(rows, conv_rel)
     if args.format == "codex":
         out = json.dumps(
             {

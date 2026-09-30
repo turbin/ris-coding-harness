@@ -1,0 +1,361 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Golden tests for scripts/failure-event.py (M0 acceptance)."""
+import json
+import pathlib
+import subprocess
+import sys
+import unittest
+
+REPO = pathlib.Path(__file__).resolve().parents[1]
+SCRIPT = REPO / "scripts" / "failure-event.py"
+
+
+def run_cli(doc):
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT)],
+        input=json.dumps(doc),
+        capture_output=True, text=True, encoding="utf-8", timeout=30,
+    )
+    assert proc.returncode == 0, f"exit={proc.returncode} stderr={proc.stderr}"
+    return json.loads(proc.stdout)
+
+
+def base_doc(**signal_overrides):
+    signals = {
+        "evaluator_verdict": None, "acceptance_evidence": None,
+        "user_action": "none", "budget_exhausted": False,
+        "verification_required": False, "verification_performed": True,
+        "final_message": None, "runtime_error": "none",
+        "fatal_error_origin": None, "flaky_retry_passed": False,
+        "failure_category": None, "tool_identity": None,
+        "error_signature": None, "scope": None, "path": None, "line": None,
+    }
+    signals.update(signal_overrides)
+    return {
+        "schema_version": "failure_event_input/v1",
+        "run_id": "R1", "task_id": "T1", "attempt": 1, "terminal_sequence": 1,
+        "mode": "interactive", "signals": signals,
+    }
+
+
+# 全量 A1 判定表（23 案例）；后续任务不得删改其期望值。
+GOLDEN_CASES = [
+    # —— 验收 / verdict ——
+    ("all_acceptance_passed", {"acceptance_evidence": "passed"}, "success"),
+    ("claimed_done_but_tests_failed",
+     {"acceptance_evidence": "failed", "final_message": "complete_claim"},
+     "task_failure"),
+    ("verdict_pass_beats_incomplete_claim",
+     {"evaluator_verdict": "pass", "final_message": "incomplete_claim"},
+     "success"),
+    ("verdict_fail", {"evaluator_verdict": "fail"}, "task_failure"),
+    # —— agent 表态 / 预算 / 验证 ——
+    ("agent_says_incomplete", {"final_message": "incomplete_claim"}, "task_failure"),
+    ("budget_exhausted", {"budget_exhausted": True}, "task_failure"),
+    ("abandoned_after_retries",
+     {"final_message": "incomplete_claim", "budget_exhausted": True},
+     "task_failure"),
+    ("no_evidence_complete_claim", {"final_message": "complete_claim"},
+     "indeterminate"),
+    ("stopped_without_required_verification",
+     {"verification_required": True, "verification_performed": False,
+      "final_message": "complete_claim"},
+     "task_failure"),
+    # —— 正常恢复路径（工具错误不降级）——
+    ("transient_shell_error_then_recovered", {"acceptance_evidence": "passed"},
+     "success"),
+    ("exploratory_grep_failures",
+     {"acceptance_evidence": "passed", "failure_category": "tool_usage_error"},
+     "success"),
+    ("build_broke_then_fixed", {"acceptance_evidence": "passed"}, "success"),
+    ("flaky_test_passed_on_retry",
+     {"acceptance_evidence": "passed", "flaky_retry_passed": True}, "success"),
+    # —— 运行时致命错误（按 origin 分流）——
+    ("external_outage",
+     {"runtime_error": "fatal", "fatal_error_origin": "external"},
+     "infra_failure"),
+    ("hook_script_crash",
+     {"runtime_error": "fatal", "fatal_error_origin": "harness"},
+     "infra_failure"),
+    ("unknown_origin_fatal",
+     {"runtime_error": "fatal", "fatal_error_origin": "unknown"},
+     "infra_failure"),
+    ("agent_broke_environment",
+     {"runtime_error": "fatal", "fatal_error_origin": "agent",
+      "failure_category": "implementation_error"},
+     "task_failure"),
+    ("error_after_prior_success",
+     {"acceptance_evidence": "passed", "runtime_error": "fatal",
+      "fatal_error_origin": "external"},
+     "success"),
+    # —— 用户动作 ——
+    ("user_cancelled", {"user_action": "cancel"}, "cancelled"),
+    ("user_rejected_result", {"user_action": "rejection"}, "task_failure"),
+    ("cancelled_after_requirement_change", {"user_action": "cancel"},
+     "cancelled"),
+    # —— 先例守卫 ——
+    ("cancel_beats_failed_evidence",
+     {"user_action": "cancel", "acceptance_evidence": "failed"}, "cancelled"),
+    ("rejection_beats_pass_verdict",
+     {"user_action": "rejection", "evaluator_verdict": "pass"}, "task_failure"),
+]
+
+
+class CliContract(unittest.TestCase):
+    def test_malformed_input_fails_open(self):
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT)],
+            input="not-json", capture_output=True, text=True,
+            encoding="utf-8", timeout=30,
+        )
+        self.assertEqual(proc.returncode, 0)
+        out = json.loads(proc.stdout)
+        self.assertFalse(out["ok"])
+        self.assertIn("error", out)
+
+    def test_unknown_enum_rejected(self):
+        doc = base_doc()
+        doc["signals"]["user_action"] = "self_destruct"
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT)],
+            input=json.dumps(doc), capture_output=True, text=True,
+            encoding="utf-8", timeout=30,
+        )
+        self.assertEqual(proc.returncode, 0)
+        out = json.loads(proc.stdout)
+        self.assertFalse(out["ok"])
+
+    def test_output_has_ok_and_state(self):
+        out = run_cli(base_doc())
+        self.assertTrue(out["ok"])
+        self.assertIn(out["terminal_state"],
+                      {"success", "task_failure", "infra_failure",
+                       "cancelled", "indeterminate"})
+
+    def test_empty_stdin_identity_missing(self):
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT)], input="",
+            capture_output=True, text=True, encoding="utf-8", timeout=30,
+        )
+        self.assertEqual(proc.returncode, 0)
+        out = json.loads(proc.stdout)
+        self.assertFalse(out["ok"])
+        self.assertIn("error", out)
+
+    def test_missing_task_id_rejected(self):
+        doc = base_doc()
+        del doc["task_id"]
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT)], input=json.dumps(doc),
+            capture_output=True, text=True, encoding="utf-8", timeout=30,
+        )
+        self.assertEqual(proc.returncode, 0)
+        out = json.loads(proc.stdout)
+        self.assertFalse(out["ok"])
+        self.assertIn("error", out)
+
+
+class GoldenClassification(unittest.TestCase):
+    def test_golden_table(self):
+        for name, overrides, expected in GOLDEN_CASES:
+            with self.subTest(case=name):
+                out = run_cli(base_doc(**overrides))
+                self.assertTrue(out["ok"], out)
+                self.assertEqual(out["terminal_state"], expected)
+
+
+class Reflectability(unittest.TestCase):
+    def test_success_not_actionable(self):
+        out = run_cli(base_doc(acceptance_evidence="passed"))
+        self.assertEqual(out["reflectability"],
+                         {"actionable": False, "recoverable": False,
+                          "agent_controllable": "unknown"})
+
+    def test_infra_not_controllable(self):
+        out = run_cli(base_doc(runtime_error="fatal", fatal_error_origin="external"))
+        self.assertEqual(out["reflectability"],
+                         {"actionable": False, "recoverable": False,
+                          "agent_controllable": False})
+
+    def test_task_failure_implementation_error_actionable(self):
+        out = run_cli(base_doc(acceptance_evidence="failed",
+                               failure_category="implementation_error"))
+        self.assertEqual(out["reflectability"],
+                         {"actionable": True, "recoverable": True,
+                          "agent_controllable": True})
+
+    def test_task_failure_environment_category_not_controllable(self):
+        out = run_cli(base_doc(user_action="rejection", failure_category="environment"))
+        self.assertEqual(out["reflectability"]["agent_controllable"], False)
+        self.assertTrue(out["reflectability"]["actionable"])
+
+    def test_indeterminate_unknown(self):
+        out = run_cli(base_doc())
+        self.assertEqual(out["reflectability"]["agent_controllable"], "unknown")
+
+
+class FailureEventId(unittest.TestCase):
+    def test_deterministic_same_input(self):
+        a = run_cli(base_doc())
+        b = run_cli(base_doc())
+        self.assertEqual(a["failure_event_id"], b["failure_event_id"])
+        self.assertRegex(a["failure_event_id"], r"^fe_[0-9a-f]{16}$")
+
+    def test_terminal_sequence_separates_events(self):
+        a = run_cli(base_doc())
+        doc = base_doc()
+        doc["terminal_sequence"] = 2
+        b = run_cli(doc)
+        self.assertNotEqual(a["failure_event_id"], b["failure_event_id"])
+
+    def test_run_id_separates_events(self):
+        a = run_cli(base_doc())
+        doc = base_doc()
+        doc["run_id"] = "R2"
+        b = run_cli(doc)
+        self.assertNotEqual(a["failure_event_id"], b["failure_event_id"])
+
+
+def fp_doc(**overrides):
+    sig = {"acceptance_evidence": "failed",
+           "failure_category": "implementation_error",
+           "tool_identity": "pytest",
+           "error_signature": "LegacySchemaError: missing field 'invoice'",
+           "scope": "parser", "path": "src/parser.py", "line": 183}
+    sig.update(overrides)
+    return base_doc(**sig)
+
+
+class ReflectionFingerprint(unittest.TestCase):
+    def test_identical_failures_equal(self):
+        a = run_cli(fp_doc())
+        b = run_cli(fp_doc())
+        self.assertEqual(a["fingerprints"]["reflection"],
+                         b["fingerprints"]["reflection"])
+        self.assertEqual(a["fingerprints"]["reflection"]["version"], "rf/v1")
+
+    def test_line_change_makes_new_fingerprint(self):
+        a = run_cli(fp_doc())
+        b = run_cli(fp_doc(line=241))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+
+    def test_path_change_makes_new_fingerprint(self):
+        a = run_cli(fp_doc())
+        b = run_cli(fp_doc(path="src/parser_v2.py"))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+
+    def test_timestamp_noise_ignored(self):
+        a = run_cli(fp_doc(error_signature="fail at 2026-09-24T10:00:00Z"))
+        b = run_cli(fp_doc(error_signature="fail at 2026-09-25T23:59:59Z"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
+    def test_tmp_path_noise_ignored(self):
+        a = run_cli(fp_doc(path="/tmp/run-a/parser.py"))
+        b = run_cli(fp_doc(path="/tmp/run-b/parser.py"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
+    def test_windows_user_temp_noise_ignored(self):
+        a = run_cli(fp_doc(path="C:\\Users\\dev\\AppData\\Local\\Temp\\run-a\\parser.py"))
+        b = run_cli(fp_doc(path="C:\\Users\\dev\\AppData\\Local\\Temp\\run-b\\parser.py"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
+    def test_home_noise_ignored(self):
+        a = run_cli(fp_doc(path="C:\\Users\\alice\\proj\\parser.py"))
+        b = run_cli(fp_doc(path="C:\\Users\\bob\\proj\\parser.py"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
+    def test_uuid_noise_ignored(self):
+        a = run_cli(fp_doc(error_signature="run 550e8400-e29b-41d4-a716-446655440000 failed"))
+        b = run_cli(fp_doc(error_signature="run 6ba7b810-9dad-11d1-80b4-00c04fd430c8 failed"))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
+    def test_line_string_coerced_to_int(self):
+        a = run_cli(fp_doc(line="183"))
+        b = run_cli(fp_doc(line=183))
+        self.assertEqual(a["fingerprints"]["reflection"]["hash"],
+                         b["fingerprints"]["reflection"]["hash"])
+
+
+class RecurrenceSignature(unittest.TestCase):
+    def test_parser_example_same_recurrence_different_reflection(self):
+        a = run_cli(fp_doc(path="src/parser.py", line=183))
+        b = run_cli(fp_doc(path="src/parser_v2.py", line=241))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+        self.assertEqual(a["fingerprints"]["recurrence"]["hash"],
+                         b["fingerprints"]["recurrence"]["hash"])
+
+    def test_line_only_change_same_recurrence(self):
+        a = run_cli(fp_doc(line=183))
+        b = run_cli(fp_doc(line=190))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+        self.assertEqual(a["fingerprints"]["recurrence"]["hash"],
+                         b["fingerprints"]["recurrence"]["hash"])
+
+    def test_different_category_different_recurrence(self):
+        a = run_cli(fp_doc())
+        b = run_cli(fp_doc(failure_category="requirement_misunderstanding"))
+        self.assertNotEqual(a["fingerprints"]["recurrence"]["hash"],
+                            b["fingerprints"]["recurrence"]["hash"])
+
+    def test_different_scope_different_recurrence(self):
+        a = run_cli(fp_doc())
+        b = run_cli(fp_doc(scope="auth"))
+        self.assertNotEqual(a["fingerprints"]["recurrence"]["hash"],
+                            b["fingerprints"]["recurrence"]["hash"])
+
+    def test_line_number_in_signature_normalized(self):
+        a = run_cli(fp_doc(error_signature="parser.py:183 boom"))
+        b = run_cli(fp_doc(error_signature="parser.py:241 boom"))
+        self.assertEqual(a["fingerprints"]["recurrence"]["hash"],
+                         b["fingerprints"]["recurrence"]["hash"])
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+
+    def test_recurrence_version(self):
+        out = run_cli(fp_doc())
+        self.assertEqual(out["fingerprints"]["recurrence"]["version"], "rs/v1")
+
+    def test_quoted_unix_path_pair(self):
+        a = run_cli(fp_doc(error_signature='File "/opt/projA/foo.py failed"'))
+        b = run_cli(fp_doc(error_signature='File "/opt/projB/foo.py failed"'))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+        self.assertEqual(a["fingerprints"]["recurrence"]["hash"],
+                         b["fingerprints"]["recurrence"]["hash"])
+
+    def test_home_remnant_path_pair(self):
+        a = run_cli(fp_doc(error_signature="open C:\\Users\\dev\\projA\\foo.py failed"))
+        b = run_cli(fp_doc(error_signature="open C:\\Users\\bob\\projB\\foo.py failed"))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+        self.assertEqual(a["fingerprints"]["recurrence"]["hash"],
+                         b["fingerprints"]["recurrence"]["hash"])
+
+    def test_relative_path_pair(self):
+        a = run_cli(fp_doc(error_signature="src/a/foo.py:42 boom"))
+        b = run_cli(fp_doc(error_signature="src/b/foo.py:99 boom"))
+        self.assertNotEqual(a["fingerprints"]["reflection"]["hash"],
+                            b["fingerprints"]["reflection"]["hash"])
+        self.assertEqual(a["fingerprints"]["recurrence"]["hash"],
+                         b["fingerprints"]["recurrence"]["hash"])
+
+
+class Determinism(unittest.TestCase):
+    def test_three_runs_identical_output(self):
+        outputs = [run_cli(fp_doc()) for _ in range(3)]
+        self.assertEqual(outputs[0], outputs[1])
+        self.assertEqual(outputs[1], outputs[2])
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

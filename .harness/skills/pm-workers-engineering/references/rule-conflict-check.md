@@ -13,8 +13,8 @@ for conflicts are one synchronous step. Outcomes split into auto-resolvable
 
 1. **Synchronous (mandatory)** — for every proposal, before approval and
    before any file change. Scope: the full target file plus every other rule
-   file governing the same concern (same topic across `docs/engineering/`).
-2. **Periodic** — during every retro, sweep all of `docs/engineering/` for
+   file governing the same concern (same topic across `.harness/docs/engineering/`).
+2. **Periodic** — during every retro, sweep all of `.harness/docs/engineering/` for
    contradictions between existing rules, not only the new proposals.
 
 ## Conflict classes and disposition
@@ -44,7 +44,7 @@ Every proposal document must contain a conflict-check section:
 ```yaml
 conflict_check:
   status: no-conflict | auto-mergeable | needs-user-arbitration
-  scanned: [docs/engineering/coding.md, docs/engineering/performance.md]
+  scanned: [.harness/docs/engineering/coding.md, .harness/docs/engineering/performance.md]
   findings:
     - rule: "coding.md#bounded-caches"
       relation: duplicate | wording | directional | cross-layer | oscillation

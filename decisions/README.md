@@ -14,3 +14,4 @@ RSI 闭环 MUTATE 环节（`docs/rsi-design.md` §4.4）的审计轨迹：
 - `2026-09-23-diagram-skills-vendoring.md` — L2 资产新增：vendor c4-architecture + mermaid-diagrams（方案 A′：两 skill 判为用户级、经 `.harness/skill-scope.txt` 分发到全部 agent 的用户目录；替换用户级同类 skill；触发冲突已解决，输出位置改造待决）
 - `2026-09-23-graphify-scale-gate.md` — L3 资产新增：init/adopt 按工程文件数（阈值 483，`.harness/graphify-threshold.txt`）判定 graphify 启用/禁用 + 安装器 `--graphify auto|on|off`
 - `2026-09-23-topology-synthesis.md` — L2 资产新增：architecture-topology 按需拓扑合成 + 落盘缓存（user 级，规模门禁用 graphify 的工程的 fallback）
+- `2026-09-24-failure-reflection-loop.md` — L3 机制设计：任务失败反思回路（Trigger/Reflect/Archive/Recall/Transition；DEC-FR-001~015 + 四项开口裁决：interactive_task_epoch / 证据权威+Kimi 抓包 / MVP 无 fast-gate / 双指纹拆分）

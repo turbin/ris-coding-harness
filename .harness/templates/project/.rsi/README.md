@@ -14,7 +14,8 @@ anything under this directory.
 - `layers` — the L1 (project rules) / L1P (platform knowledge cards) /
   L2 (collaboration protocol) / L3 (harness mechanism) risk tiers.
 - `platform_knowledge` — L1P commit discipline: cards under
-  `docs/engineering/platform/` are drafted but never auto-committed; a human
+  `.harness/docs/engineering/platform/` (pre-v2 layouts: `docs/engineering/platform/`)
+  are drafted but never auto-committed; a human
   commits them and may later export them to an external knowledge base.
 
 Every self-improvement change must land as its own git commit whose message
