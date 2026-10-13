@@ -530,6 +530,13 @@ $($script:BeginMark)
 - `.harness/decisions/`, `.harness/issues/`, `.harness/progress/` hold project records - use each `index.md` before reading many child files.
 - `.harness/evals/results/` receives structured reviewer verdicts.
 
+**Working discipline (hard constraints, effective from session start)**
+
+- Architecture answers come from the repository's docs (`.harness/docs/engineering/`, decisions records) only; if the docs do not cover it, say so explicitly - never improvise or fill gaps from model priors.
+- Design and implementation are separate: brainstorming/planning output is not evidence of implementation; judge "is it implemented" only from code, tests, and run evidence.
+- Before ruling any module/file/skill dead for deletion, run a full-repo reference check (imports, docstrings, config, doc mentions) and produce the reference list first - no verdict without the list.
+- Cross-line touchpoints must be registered: when a decision/plan declares a cross-line dependency ("regression deferred to the next campaign", "adapter to be added later", "landed with phase M<n>"), add a row to `.harness/progress/touchpoints.md` (producer, consumer, touchpoint, status) and close it with evidence when settled. Vertical chains (decision -> plan -> progress -> index) do not substitute for this horizontal registry.
+
 $searchSection
 **Harness mechanism boundary**
 
@@ -1088,6 +1095,30 @@ Use this file as a lightweight navigation surface. Keep entries concise and poin
     Write-If-Missing (Join-Path $TargetRoot ".harness/$d/index.md") $IndexBody
   }
   New-Item -ItemType Directory -Force -Path (Join-Path $TargetRoot ".harness/evals/results") | Out-Null
+
+  # Cross-line touchpoint registry: the horizontal-discipline surface routed
+  # from the managed AGENTS section (Write-If-Missing keeps existing rows).
+  $TouchpointsBody = @'
+# Cross-line touchpoints
+
+Registry for cross-line dependencies and deferred debts: artifacts of line A
+that line B must consume, changes in A that require B to follow up, or a
+regression/adaptation A owes B. Do not duplicate vertical chains
+(decision -> plan -> progress -> index) here.
+
+Rules:
+
+- When a decision/plan declares a cross-line dependency ("regression deferred
+  to the next campaign", "adapter to be added later", "landed with phase M<n>"),
+  register one row here in the same change.
+- Close a touchpoint (consumer landed / regression run) by setting Status to
+  closed with an evidence link.
+- Status: open (debt outstanding) / closed (settled, with evidence).
+
+| ID | Line A (producer) | Line B (consumer/affected) | Touchpoint | Status | Evidence / Due |
+|---|---|---|---|---|---|
+'@
+  Write-If-Missing (Join-Path $TargetRoot ".harness/progress/touchpoints.md") $TouchpointsBody
 
   # compact-recall hook state: archived summaries + per-session recall markers.
   New-Item -ItemType Directory -Force -Path (Join-Path $TargetRoot ".harness/conversations/archive"), (Join-Path $TargetRoot ".harness/conversations/.state") | Out-Null
