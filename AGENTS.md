@@ -10,6 +10,10 @@
 3. **用户可见状态必须准确**：TUI 进度面板等用户可观察的状态是交付质量的一部分；陈旧的进度信息比没有更糟（主动误导），发现过期立即更正。
 4. **语义存疑先问再动**：用户指令含义不明时（单词/缩写/指代、多解并存、意图缺口落在是否要执行上），先用正文一句话给出「我的理解 + 可选项」并等答复，**不得择一直接执行**；分歧涉及执行类动作（写盘、安装/卸载、删除、`git commit`、改配置或用户目录）时此条强制。auto 权限模式下 `AskUserQuestion` 不可用，只是不可用该工具，**不等于可以不问**——正文提问即可。
 5. **推断不得充当用户表态**：未经用户明说的解读，禁止写成「用户决定/已裁决」进入 `decisions/`、`issues/`、`*/index.md`、TodoList 或对用户的汇报；只能记「待用户答复」，误写立即改正。此项从第 3 条派生：状态失真既包括过期，也包括**虚构表态**。
+6. **架构描述以文档为准**：回答架构/结构问题时，只依据仓库现有文档（`docs/`、`.harness/docs/engineering/`、decision 记录）；文档没有的明说「文档中没有」，不得口头补位或凭模型先验编造。
+7. **设计与实现分离**：头脑风暴/规划产出的设计不算实现信号；判断某功能是否已实现，只认代码、测试、运行证据。
+8. **判死先查引用**：裁决删除任何模块/文件/skill 前，先做全仓库引用核查（import、docstring、配置、文档提及），产出引用清单后才可裁决；无清单不裁决。
+9. **跨线触点必须登记**：决策/计划声明跨工作线依赖（「回归待下一次战役」「后续补适配」「随某阶段一并展开」等）时，必须同步登记一行到 `progress/touchpoints.md`（生产方、消费方、触点内容、状态）；触点清偿（消费方落地、回归已跑）时更新状态并附证据。纵向链条（decision→plan→progress→index）不能替代横向登记。
 
 ## 回顾此前的对话/工作（compact-recall）
 
@@ -27,6 +31,6 @@
 
 ## 工程约定速览
 
-- 目录与索引约定遵循安装器模板（`docs/`、`decisions/`、`progress/` 等，各带 `index.md`）。
-- 测试与自检：`./tests/install-smoke.sh`、`./evals/run-eval.sh verdicts`、`./tests/compact-recall-smoke.sh`（compact-recall 冒烟，覆盖 kimi/claude/codex 归档路径与安装器幂等）。
+- 目录与索引约定：`issues/` 带 `index.md`；`decisions/`、`progress/` 以 README 为索引（本仓库自身现状，与安装器模板「各带 index.md」不同）；跨线触点登记面为 `progress/touchpoints.md`。
+- 测试与自检：`./tests/install-smoke.sh`、`./evals/run-eval.sh verdicts`、`./tests/compact-recall-smoke.sh`（compact-recall 冒烟，覆盖 kimi/claude/codex 归档路径与安装器幂等）、`./tests/trigger-smoke.sh`（事件触发冒烟）、`./tests/trace-usage-smoke.sh`（成本遥测冒烟）、`./tests/failure-event-smoke.sh`（失败事件判定表）、`./tests/retro-aggregate-smoke.sh`（verdict 聚合 + 预算遥测冒烟）、`./tests/rsi-loop-smoke.sh`（rsi-loop 文件契约 + retro 触发判定表冒烟）。
 - 详细设计见 `README.md` 与 `docs/rsi-design.md`。

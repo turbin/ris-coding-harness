@@ -443,10 +443,12 @@ Agent 首先读取 `AGENTS.md`，再读取 `.harness/docs/engineering/index.md`�
 pwsh ./tests/install-smoke.ps1  # Windows（PowerShell 5.1+ / pwsh 7+）
 ./tests/trigger-smoke.sh        # 事件触发 hook 的置标/防抖/消费生命周期
 ./tests/compact-recall-smoke.sh # compact-recall 归档/索引/回顾注入生命周期
+./tests/retro-aggregate-smoke.sh # verdict 聚合 fail-fast / 合法聚合 / §4.8 预算遥测
+./tests/rsi-loop-smoke.sh       # rsi-loop skill 完整性 + state/round/queue 契约 + retro 触发判定表
 ./evals/run-eval.sh verdicts    # verdict yaml 机械校验（schema v2，v1 兼容告警）
 ```
 
-覆盖：`init`/`adopt` 自动模式判断、核心文件落位（含 `.harness/.rsi/` 策略、`.harness/scripts/` hook 副本、`.harness/evals/results/`、`.harness/` 记录目录与 `layout-version.txt`）、已有工程不被重排、重复执行的非破坏性、`--agent` 多目标分发与重复传参、未知 agent 的 fail-fast、`--check` 三态（missing / ok / incomplete）与零写入保证、退出码契约（用法错误 = 2）、env 阶段四态（dry-run 不执行 / 失败仅告警 / `--strict-env` 退出 3 / `--skip-env` 零写入）、AGENTS.md/CLAUDE.md 标记合并与刷新幂等、legacy 布局自动迁移（同件搬走 / 定制留原地）、layout v1 → v2 记录目录迁移（含目标冲突保留根级副本、v1 policy 升级、幂等重跑）。
+覆盖：`init`/`adopt` 自动模式判断、核心文件落位（含 `.harness/.rsi/` 策略、`.harness/scripts/` hook 副本、`.harness/evals/results/`、`.harness/` 记录目录与 `layout-version.txt`）、已有工程不被重排、重复执行的非破坏性、`--agent` 多目标分发与重复传参、未知 agent 的 fail-fast、`--check` 三态（missing / ok / incomplete）与零写入保证、退出码契约（用法错误 = 2）、env 阶段四态（dry-run 不执行 / 失败仅告警 / `--strict-env` 退出 3 / `--skip-env` 零写入）、AGENTS.md/CLAUDE.md 标记合并与刷新幂等、legacy 布局自动迁移（同件搬走 / 定制留原地）、layout v1 → v2 记录目录迁移（含目标冲突保留根级副本、v1 policy 升级、幂等重跑）、verdict 聚合器的合法聚合 / P4 fail-fast（列出全部坏文件）/ 预算遥测合计、rsi-loop 的 skill 文件完整性 / state-round-queue 文件契约 / §4.3 retro 触发判定表 / stop-conditions 表完整性。
 
 ## 旧入口
 
